@@ -30,16 +30,40 @@ def _scan_subscription(sub_id, sub_name, credential, builtin_policies):
     analyzer = PolicyAnalyzer()
     recommender = PolicyRecommender()
 
-    with ThreadPoolExecutor(max_workers=3) as ex:
+    with ThreadPoolExecutor(max_workers=4) as ex:
         f_comp = ex.submit(fetcher.get_compliance_summary, sub_id)
+        f_overview = ex.submit(fetcher.get_compliance_overview, sub_id)
         f_custom = ex.submit(fetcher.get_custom_policies, sub_id)
         f_assign = ex.submit(fetcher.get_policy_assignments, sub_id)
         compliance = f_comp.result()
+        overview = f_overview.result()
         custom_policies = f_custom.result()
         assignments = f_assign.result()
 
     analyzed = analyzer.analyze(custom_policies, assignments, compliance)
     recs = recommender.get_recommendations(analyzed["problematic"], builtin_policies)
+
+    # Recommended assignments: top built-in policies NOT already assigned
+    assigned_def_names = {
+        a.get("policy_definition_id", "").rstrip("/").split("/")[-1].lower()
+        for a in assignments
+    }
+    POPULAR_RECOMMENDED = [
+        {"name": "37e0d2fe-28a5-43d6-a273-67d37d1f5606", "display_name": "Inherit a tag from the resource group", "description": "Automated inheritance of tags from Resource Group to resources.", "category": "Tags"},
+        {"name": "96670d01-0a4d-4649-9c89-2d3abc0a5025", "display_name": "Require a tag on resource groups", "description": "Enforce existence of a tag on Resource Group.", "category": "Tags"},
+        {"name": "a08ec900-254a-4555-9bf5-e42af04b5c5c", "display_name": "Not allowed resource types", "description": "Block the creation of specified resource types.", "category": "General"},
+        {"name": "72650e9f-97bc-4b2a-0b59-daab3dc5ee70", "display_name": "Windows Defender Exploit Guard should be enabled", "description": "Deploy security baselines for Windows VMs.", "category": "Security"},
+        {"name": "4da35fc9-c9e7-4960-aec9-797fe7d9051d", "display_name": "Enable Azure Monitor for VMs", "description": "Install monitoring and dependency agents on VMs.", "category": "Monitoring"},
+        {"name": "1f3afdf9-d0c9-4c3d-847f-89da613e70a8", "display_name": "Enable Microsoft Defender for Cloud", "description": "Monitor security recommendations by Microsoft Defender for Cloud.", "category": "Security Center"},
+        {"name": "e56962a6-4747-49cd-b67b-bf8b01975c4c", "display_name": "Allowed locations", "description": "Restrict the locations your organization can create resources.", "category": "General"},
+        {"name": "06a78e20-9358-41c9-923c-fb736d382a4d", "display_name": "Audit VMs that do not use managed disks", "description": "Audit VMs not using managed disks.", "category": "Compute"},
+        {"name": "0961003e-5a0a-4549-abde-af6a37f2724d", "display_name": "Virtual machines should encrypt temp disks, caches, and data flows", "description": "Enforce disk encryption to protect data at rest.", "category": "Security"},
+    ]
+    recommended_assignments = [
+        {**r, "portal_url": f"https://portal.azure.com/#view/Microsoft_Azure_Policy/PolicyDetailBlade/definitionId/%2Fproviders%2FMicrosoft.Authorization%2FpolicyDefinitions%2F{r['name']}"}
+        for r in POPULAR_RECOMMENDED
+        if r["name"].lower() not in assigned_def_names
+    ][:6]
 
     # Insights analysis
     from modules.insights import (
@@ -57,6 +81,8 @@ def _scan_subscription(sub_id, sub_name, credential, builtin_policies):
         "subscription_id": sub_id,
         "subscription_name": sub_name,
         "compliance": compliance,
+        "compliance_overview": overview,
+        "recommended_assignments": recommended_assignments,
         "custom_policies": {
             "stats": analyzed["stats"],
             "all": analyzed["all"],

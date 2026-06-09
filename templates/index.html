@@ -403,6 +403,142 @@ function renderInsights(results) {
   }
 }
 
+
+// =====================================================================
+// Dashboard rendering
+// =====================================================================
+function renderDashboard(results) {
+  // Aggregate overview across subscriptions
+  let polCompliant=0, polNonCompliant=0, polError=0;
+  let resCompliant=0, resNonCompliant=0;
+  let pendingRem=0;
+  let allCompliance=[];
+  let allRecommended=[];
+
+  results.forEach(r => {
+    const ov = r.compliance_overview || {};
+    polCompliant += ov.policy_compliant || 0;
+    polNonCompliant += ov.policy_non_compliant || 0;
+    polError += ov.policy_error || 0;
+    resCompliant += ov.resource_compliant || 0;
+    resNonCompliant += ov.resource_non_compliant || 0;
+    pendingRem += ov.pending_remediation || 0;
+    allCompliance.push(...(r.compliance||[]));
+    (r.recommended_assignments||[]).forEach(ra => {
+      if (!allRecommended.find(x => x.name === ra.name)) allRecommended.push(ra);
+    });
+  });
+
+  // Donut: Policy Compliance
+  const polTotal = polCompliant + polNonCompliant + polError;
+  drawDonut('donut-policy', [
+    {value: polCompliant, color: '#107c10'},
+    {value: polNonCompliant, color: '#d13438'},
+    {value: polError, color: '#f7c300'},
+  ], polTotal);
+  document.getElementById('legend-policy').innerHTML = `
+    <span style="color:#107c10">■</span> ${polCompliant} - Compliant<br>
+    <span style="color:#d13438">■</span> ${polNonCompliant} - Non-compliant<br>
+    ${polError>0?`<span style="color:#f7c300">■</span> ${polError} - Error<br>`:''}`;
+
+  // Donut: Initiative (placeholder from custom policies data)
+  const ini = results[0]?.custom_policies?.stats || {};
+  const iniCompliant = ini.ok||0, iniNonCompliant = (ini.errors||0)+(ini.warnings||0);
+  const iniTotal = iniCompliant + iniNonCompliant;
+  drawDonut('donut-initiative', [
+    {value: iniCompliant, color: '#107c10'},
+    {value: iniNonCompliant, color: '#d13438'},
+  ], iniTotal);
+  document.getElementById('legend-initiative').innerHTML = `
+    <span style="color:#107c10">■</span> ${iniCompliant} - Healthy<br>
+    <span style="color:#d13438">■</span> ${iniNonCompliant} - Issues<br>`;
+
+  // Resource compliance
+  const resTotal = resCompliant + resNonCompliant;
+  const resPct = resTotal > 0 ? Math.round(100 * resCompliant / resTotal) : null;
+  const pctEl = document.getElementById('resource-pct');
+  const barEl = document.getElementById('resource-bar');
+  const lblEl = document.getElementById('resource-label');
+  pctEl.textContent = resPct !== null ? resPct + '%' : '--';
+  pctEl.style.color = resPct !== null ? (resPct >= 70 ? '#107c10' : resPct >= 40 ? '#7a4100' : '#d13438') : '#1f1f1f';
+  barEl.style.width = (resPct||0) + '%';
+  barEl.style.background = resPct !== null ? (resPct >= 70 ? '#107c10' : resPct >= 40 ? '#f7c300' : '#d13438') : '#edebe9';
+  lblEl.textContent = resTotal > 0 ? `${resCompliant} out of ${resTotal} resources` : 'No resource data';
+
+  // Portal link for overall
+  if (results[0]?.subscription_id) {
+    const subId = results[0].subscription_id;
+    document.getElementById('link-resource-compliance').href =
+      `https://portal.azure.com/#view/Microsoft_Azure_Policy/PolicyMenuBlade/~/Compliance`;
+    document.getElementById('link-policy-compliance').href =
+      `https://portal.azure.com/#view/Microsoft_Azure_Policy/PolicyMenuBlade/~/Compliance`;
+  }
+
+  // Pending remediation
+  document.getElementById('pending-count').textContent = pendingRem;
+
+  // Recommended assignments
+  const recEl = document.getElementById('recommended-assignments');
+  if (!allRecommended.length) {
+    recEl.innerHTML = '<div class="muted" style="font-size:.82rem">All common policies are already assigned. Great work!</div>';
+  } else {
+    recEl.innerHTML = allRecommended.slice(0,6).map(r => `
+      <a href="${esc(r.portal_url||'#')}" target="_blank" style="display:flex;align-items:flex-start;gap:10px;padding:9px 0;border-bottom:1px solid #f3f2f1;text-decoration:none;color:inherit" onmouseover="this.style.background='#f3f9ff'" onmouseout="this.style.background=''">
+        <span style="width:32px;height:32px;background:#dce9f8;border-radius:6px;display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:.95rem">📋</span>
+        <div>
+          <div style="font-size:.84rem;font-weight:700;color:#0078d4">${esc(r.display_name||'')}</div>
+          <div style="font-size:.74rem;color:#605e5c;margin-top:2px">${esc(r.description||'')}</div>
+        </div>
+      </a>`).join('');
+  }
+
+  // Non-compliant table
+  allCompliance.sort((a,b) => b.non_compliant_resources - a.non_compliant_resources);
+  const ncEl = document.getElementById('dashboard-noncompliant');
+  if (!allCompliance.length) {
+    ncEl.innerHTML = '<div class="badge b-ok" style="padding:8px 14px">✓ No non-compliant assignments found</div>';
+  } else {
+    ncEl.innerHTML = `<div class="tbl-wrap"><table>
+      <thead><tr><th>Assignment</th><th>Non-Compliant Resources</th><th>Policies Affected</th><th></th></tr></thead>
+      <tbody>${allCompliance.slice(0,10).map(c => `
+        <tr>
+          <td><strong>${esc(c.policy_assignment_name||'')}</strong><br>
+            <span class="muted" style="font-size:.72rem">${esc(c.policy_assignment_id||'')}</span>
+          </td>
+          <td><span class="badge b-err">${c.non_compliant_resources}</span></td>
+          <td>${c.non_compliant_policies||0}</td>
+          <td><a href="https://portal.azure.com/#view/Microsoft_Azure_Policy/PolicyAssignmentDetailBlade/id/${encodeURIComponent(c.policy_assignment_id||'')}" target="_blank" class="portal-link">View in Portal ↗</a></td>
+        </tr>`).join('')}
+      </tbody></table></div>`;
+  }
+}
+
+function drawDonut(svgId, segments, total) {
+  const svg = document.getElementById(svgId);
+  if (!svg) return;
+  const cx=55, cy=55, r=40, stroke=18;
+  const circ = 2 * Math.PI * r;
+  if (total === 0) {
+    svg.innerHTML = `<circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="#edebe9" stroke-width="${stroke}"/>
+      <text x="${cx}" y="${cy}" text-anchor="middle" dominant-baseline="middle" style="font-size:14px;font-weight:800;fill:#8a8886">--</text>`;
+    return;
+  }
+  let offset = -circ / 4; // start at top
+  let html = '';
+  const displayTotal = segments.reduce((s,seg)=>s+seg.value,0);
+  segments.forEach(seg => {
+    if (!seg.value) return;
+    const len = (seg.value / displayTotal) * circ;
+    html += `<circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="${seg.color}" stroke-width="${stroke}"
+      stroke-dasharray="${len} ${circ-len}" stroke-dashoffset="${-offset}" transform="rotate(-90 ${cx} ${cy})"/>`;
+    offset += len;
+  });
+  const maxSeg = segments.reduce((a,b) => a.value>b.value?a:b, segments[0]);
+  html += `<text x="${cx}" y="${cy-6}" text-anchor="middle" dominant-baseline="middle" style="font-size:18px;font-weight:800;fill:${maxSeg.color}">${total}</text>`;
+  html += `<text x="${cx}" y="${cy+10}" text-anchor="middle" style="font-size:9px;fill:#605e5c">total</text>`;
+  svg.innerHTML = html;
+}
+
 </script>
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
@@ -639,7 +775,8 @@ tr.clickable{cursor:pointer}tr.clickable:hover td{background:#faf9f8}
     <div class="tabs">
       <div class="tab" id="tab-btn-compliance" onclick="showTab('compliance')">Non-Compliance <span class="tab-badge red" id="tbadge-compliance">0</span></div>
       <div class="tab" id="tab-btn-custom" onclick="showTab('custom')">Custom Policy Issues <span class="tab-badge amber" id="tbadge-custom">0</span></div>
-      <div class="tab active" id="tab-btn-recs" onclick="showTab('recs')">🔄 Built-in Replacements <span class="tab-badge" id="tbadge-recs">0</span></div>
+      <div class="tab active" id="tab-btn-dashboard" onclick="showTab('dashboard')">📊 Dashboard</div>
+      <div class="tab" id="tab-btn-recs" onclick="showTab('recs')">🔄 Built-in Replacements <span class="tab-badge" id="tbadge-recs">0</span></div>
       <div class="tab" id="tab-btn-agent" onclick="showTab('agent')">🤖 Policy Agent</div>
       <div class="tab" id="tab-btn-insights" onclick="showTab('insights')">🔎 Insights <span class="tab-badge" id="tbadge-insights">0</span></div>
       <div class="tab" id="tab-btn-insights" onclick="showTab('insights')">🔎 Insights <span class="tab-badge" id="tbadge-insights">0</span></div>
@@ -661,7 +798,7 @@ tr.clickable{cursor:pointer}tr.clickable:hover td{background:#faf9f8}
         <div id="custom-body"></div>
       </div>
     </div>
-    <div class="tc active" id="tc-recs">
+    <div class="tc" id="tc-recs">
       <div class="card">
         <div class="card-title">
           🔄 Built-in Policy Replacements
@@ -690,6 +827,81 @@ tr.clickable{cursor:pointer}tr.clickable:hover td{background:#faf9f8}
       </div>
     </div>
 
+
+
+    <!-- DASHBOARD TAB -->
+    <div class="tc active" id="tc-dashboard">
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr 320px;gap:16px;align-items:start">
+
+        <!-- Policy Compliance donut -->
+        <div class="card" style="padding:18px">
+          <div style="font-size:.85rem;font-weight:600;color:#323130;margin-bottom:12px;display:flex;align-items:center;justify-content:space-between">
+            Policy Compliance
+            <a id="link-policy-compliance" href="#" target="_blank" style="font-size:.72rem;color:#0078d4">View in Portal ↗</a>
+          </div>
+          <div style="display:flex;align-items:center;gap:18px">
+            <svg id="donut-policy" width="110" height="110" viewBox="0 0 110 110"></svg>
+            <div id="legend-policy" style="font-size:.78rem;line-height:1.9"></div>
+          </div>
+        </div>
+
+        <!-- Initiative Compliance donut -->
+        <div class="card" style="padding:18px">
+          <div style="font-size:.85rem;font-weight:600;color:#323130;margin-bottom:12px;display:flex;align-items:center;justify-content:space-between">
+            Initiative Compliance
+            <a href="https://portal.azure.com/#view/Microsoft_Azure_Policy/PolicyMenuBlade/~/Compliance" target="_blank" style="font-size:.72rem;color:#0078d4">View in Portal ↗</a>
+          </div>
+          <div style="display:flex;align-items:center;gap:18px">
+            <svg id="donut-initiative" width="110" height="110" viewBox="0 0 110 110"></svg>
+            <div id="legend-initiative" style="font-size:.78rem;line-height:1.9"></div>
+          </div>
+        </div>
+
+        <!-- Overall resource compliance + pending remediation -->
+        <div style="display:flex;flex-direction:column;gap:16px">
+          <div class="card" style="padding:18px">
+            <div style="font-size:.85rem;font-weight:600;color:#323130;margin-bottom:10px;display:flex;align-items:center;justify-content:space-between">
+              Overall Resource Compliance
+              <a id="link-resource-compliance" href="#" target="_blank" style="font-size:.72rem;color:#0078d4">↗</a>
+            </div>
+            <div id="resource-pct" style="font-size:2.4rem;font-weight:800;line-height:1;color:#1f1f1f">-</div>
+            <div id="resource-bar-wrap" style="margin-top:10px">
+              <div style="height:8px;background:#edebe9;border-radius:4px;overflow:hidden">
+                <div id="resource-bar" style="height:100%;background:#107c10;border-radius:4px;width:0%;transition:width .8s"></div>
+              </div>
+              <div id="resource-label" style="font-size:.75rem;color:#605e5c;margin-top:5px"></div>
+            </div>
+          </div>
+          <div class="card" style="padding:18px;cursor:pointer" id="pending-card" onclick="showTab('compliance')">
+            <div style="font-size:.85rem;font-weight:600;color:#323130;margin-bottom:6px">Pending Remediation</div>
+            <div style="display:flex;align-items:center;gap:14px">
+              <div id="pending-count" style="font-size:2.4rem;font-weight:800;color:#c73b00;line-height:1">-</div>
+              <div style="font-size:.78rem;color:#605e5c;line-height:1.4">Remediable assignments with non-compliant resources</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Recommended Assignments -->
+        <div class="card" style="padding:18px">
+          <div style="font-size:.88rem;font-weight:700;color:#323130;margin-bottom:14px;display:flex;align-items:center;gap:6px">
+            💡 Recommended Assignments
+          </div>
+          <div id="recommended-assignments">
+            <div class="muted" style="font-size:.82rem">Run a scan to see recommendations.</div>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- Non-Compliant Assignments table -->
+      <div class="card" style="margin-top:16px">
+        <div class="card-title" style="display:flex;align-items:center;justify-content:space-between">
+          Top Non-Compliant Assignments
+          <a href="https://portal.azure.com/#view/Microsoft_Azure_Policy/PolicyMenuBlade/~/Compliance" target="_blank" style="font-size:.78rem;color:#0078d4;font-weight:400">View all in Portal ↗</a>
+        </div>
+        <div id="dashboard-noncompliant"></div>
+      </div>
+    </div>
 
     <!-- INSIGHTS TAB -->
     <div class="tc" id="tc-insights">
@@ -1162,9 +1374,9 @@ function renderResults(results) {
   document.getElementById('tbadge-compliance').textContent=totalComp;
   document.getElementById('tbadge-custom').textContent=totalErr+totalWarn;
   document.getElementById('tbadge-recs').textContent=totalRecs;
-  renderCompliance(results); renderCustom(results); renderRecs(results); renderInsights(results);
+  renderDashboard(results); renderCompliance(results); renderCustom(results); renderRecs(results); renderInsights(results);
   document.getElementById('results').classList.remove('hidden');
-  showTab('recs');
+  showTab('dashboard');
   document.getElementById('results').scrollIntoView({behavior:'smooth'});
 }
 function renderCompliance(results) {
@@ -2054,6 +2266,142 @@ function renderInsights(results) {
       </div>`;
     }).join('');
   }
+}
+
+
+// =====================================================================
+// Dashboard rendering
+// =====================================================================
+function renderDashboard(results) {
+  // Aggregate overview across subscriptions
+  let polCompliant=0, polNonCompliant=0, polError=0;
+  let resCompliant=0, resNonCompliant=0;
+  let pendingRem=0;
+  let allCompliance=[];
+  let allRecommended=[];
+
+  results.forEach(r => {
+    const ov = r.compliance_overview || {};
+    polCompliant += ov.policy_compliant || 0;
+    polNonCompliant += ov.policy_non_compliant || 0;
+    polError += ov.policy_error || 0;
+    resCompliant += ov.resource_compliant || 0;
+    resNonCompliant += ov.resource_non_compliant || 0;
+    pendingRem += ov.pending_remediation || 0;
+    allCompliance.push(...(r.compliance||[]));
+    (r.recommended_assignments||[]).forEach(ra => {
+      if (!allRecommended.find(x => x.name === ra.name)) allRecommended.push(ra);
+    });
+  });
+
+  // Donut: Policy Compliance
+  const polTotal = polCompliant + polNonCompliant + polError;
+  drawDonut('donut-policy', [
+    {value: polCompliant, color: '#107c10'},
+    {value: polNonCompliant, color: '#d13438'},
+    {value: polError, color: '#f7c300'},
+  ], polTotal);
+  document.getElementById('legend-policy').innerHTML = `
+    <span style="color:#107c10">■</span> ${polCompliant} - Compliant<br>
+    <span style="color:#d13438">■</span> ${polNonCompliant} - Non-compliant<br>
+    ${polError>0?`<span style="color:#f7c300">■</span> ${polError} - Error<br>`:''}`;
+
+  // Donut: Initiative (placeholder from custom policies data)
+  const ini = results[0]?.custom_policies?.stats || {};
+  const iniCompliant = ini.ok||0, iniNonCompliant = (ini.errors||0)+(ini.warnings||0);
+  const iniTotal = iniCompliant + iniNonCompliant;
+  drawDonut('donut-initiative', [
+    {value: iniCompliant, color: '#107c10'},
+    {value: iniNonCompliant, color: '#d13438'},
+  ], iniTotal);
+  document.getElementById('legend-initiative').innerHTML = `
+    <span style="color:#107c10">■</span> ${iniCompliant} - Healthy<br>
+    <span style="color:#d13438">■</span> ${iniNonCompliant} - Issues<br>`;
+
+  // Resource compliance
+  const resTotal = resCompliant + resNonCompliant;
+  const resPct = resTotal > 0 ? Math.round(100 * resCompliant / resTotal) : null;
+  const pctEl = document.getElementById('resource-pct');
+  const barEl = document.getElementById('resource-bar');
+  const lblEl = document.getElementById('resource-label');
+  pctEl.textContent = resPct !== null ? resPct + '%' : '--';
+  pctEl.style.color = resPct !== null ? (resPct >= 70 ? '#107c10' : resPct >= 40 ? '#7a4100' : '#d13438') : '#1f1f1f';
+  barEl.style.width = (resPct||0) + '%';
+  barEl.style.background = resPct !== null ? (resPct >= 70 ? '#107c10' : resPct >= 40 ? '#f7c300' : '#d13438') : '#edebe9';
+  lblEl.textContent = resTotal > 0 ? `${resCompliant} out of ${resTotal} resources` : 'No resource data';
+
+  // Portal link for overall
+  if (results[0]?.subscription_id) {
+    const subId = results[0].subscription_id;
+    document.getElementById('link-resource-compliance').href =
+      `https://portal.azure.com/#view/Microsoft_Azure_Policy/PolicyMenuBlade/~/Compliance`;
+    document.getElementById('link-policy-compliance').href =
+      `https://portal.azure.com/#view/Microsoft_Azure_Policy/PolicyMenuBlade/~/Compliance`;
+  }
+
+  // Pending remediation
+  document.getElementById('pending-count').textContent = pendingRem;
+
+  // Recommended assignments
+  const recEl = document.getElementById('recommended-assignments');
+  if (!allRecommended.length) {
+    recEl.innerHTML = '<div class="muted" style="font-size:.82rem">All common policies are already assigned. Great work!</div>';
+  } else {
+    recEl.innerHTML = allRecommended.slice(0,6).map(r => `
+      <a href="${esc(r.portal_url||'#')}" target="_blank" style="display:flex;align-items:flex-start;gap:10px;padding:9px 0;border-bottom:1px solid #f3f2f1;text-decoration:none;color:inherit" onmouseover="this.style.background='#f3f9ff'" onmouseout="this.style.background=''">
+        <span style="width:32px;height:32px;background:#dce9f8;border-radius:6px;display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:.95rem">📋</span>
+        <div>
+          <div style="font-size:.84rem;font-weight:700;color:#0078d4">${esc(r.display_name||'')}</div>
+          <div style="font-size:.74rem;color:#605e5c;margin-top:2px">${esc(r.description||'')}</div>
+        </div>
+      </a>`).join('');
+  }
+
+  // Non-compliant table
+  allCompliance.sort((a,b) => b.non_compliant_resources - a.non_compliant_resources);
+  const ncEl = document.getElementById('dashboard-noncompliant');
+  if (!allCompliance.length) {
+    ncEl.innerHTML = '<div class="badge b-ok" style="padding:8px 14px">✓ No non-compliant assignments found</div>';
+  } else {
+    ncEl.innerHTML = `<div class="tbl-wrap"><table>
+      <thead><tr><th>Assignment</th><th>Non-Compliant Resources</th><th>Policies Affected</th><th></th></tr></thead>
+      <tbody>${allCompliance.slice(0,10).map(c => `
+        <tr>
+          <td><strong>${esc(c.policy_assignment_name||'')}</strong><br>
+            <span class="muted" style="font-size:.72rem">${esc(c.policy_assignment_id||'')}</span>
+          </td>
+          <td><span class="badge b-err">${c.non_compliant_resources}</span></td>
+          <td>${c.non_compliant_policies||0}</td>
+          <td><a href="https://portal.azure.com/#view/Microsoft_Azure_Policy/PolicyAssignmentDetailBlade/id/${encodeURIComponent(c.policy_assignment_id||'')}" target="_blank" class="portal-link">View in Portal ↗</a></td>
+        </tr>`).join('')}
+      </tbody></table></div>`;
+  }
+}
+
+function drawDonut(svgId, segments, total) {
+  const svg = document.getElementById(svgId);
+  if (!svg) return;
+  const cx=55, cy=55, r=40, stroke=18;
+  const circ = 2 * Math.PI * r;
+  if (total === 0) {
+    svg.innerHTML = `<circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="#edebe9" stroke-width="${stroke}"/>
+      <text x="${cx}" y="${cy}" text-anchor="middle" dominant-baseline="middle" style="font-size:14px;font-weight:800;fill:#8a8886">--</text>`;
+    return;
+  }
+  let offset = -circ / 4; // start at top
+  let html = '';
+  const displayTotal = segments.reduce((s,seg)=>s+seg.value,0);
+  segments.forEach(seg => {
+    if (!seg.value) return;
+    const len = (seg.value / displayTotal) * circ;
+    html += `<circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="${seg.color}" stroke-width="${stroke}"
+      stroke-dasharray="${len} ${circ-len}" stroke-dashoffset="${-offset}" transform="rotate(-90 ${cx} ${cy})"/>`;
+    offset += len;
+  });
+  const maxSeg = segments.reduce((a,b) => a.value>b.value?a:b, segments[0]);
+  html += `<text x="${cx}" y="${cy-6}" text-anchor="middle" dominant-baseline="middle" style="font-size:18px;font-weight:800;fill:${maxSeg.color}">${total}</text>`;
+  html += `<text x="${cx}" y="${cy+10}" text-anchor="middle" style="font-size:9px;fill:#605e5c">total</text>`;
+  svg.innerHTML = html;
 }
 
 </script>
