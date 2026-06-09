@@ -810,6 +810,29 @@ function stopScan() {
   }
 }
 
+
+function appendConsoleLog(msg) {
+  const el = document.getElementById('scan-console');
+  if (!el) return;
+  // Clear the initial placeholder on first real log
+  if (el.textContent.includes('waiting for scan output')) el.innerHTML = '';
+  
+  const line = document.createElement('div');
+  const lower = msg.toLowerCase();
+  if (lower.includes('error') || lower.includes('❌') || lower.includes('fail')) {
+    line.className = 'log-error';
+  } else if (lower.includes('warn') || lower.includes('⚠')) {
+    line.className = 'log-warn';
+  } else if (lower.includes('✅') || lower.includes('done') || lower.includes('complete') || lower.includes('success')) {
+    line.className = 'log-ok';
+  } else if (lower.includes('[') && lower.includes(']')) {
+    line.className = 'log-info';
+  }
+  line.textContent = msg;
+  el.appendChild(line);
+  el.scrollTop = el.scrollHeight;
+}
+
 </script>
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
@@ -951,6 +974,11 @@ tr.clickable{cursor:pointer}tr.clickable:hover td{background:#faf9f8}
 .step-done-ico{color:#107c10}
 .step-active-ico{color:#0078d4}
 .step-pending-ico{color:#8a8886}
+.scan-console{background:#1e1e1e;border-radius:6px;padding:10px 12px;margin-top:10px;font-family:monospace;font-size:.76rem;color:#cccccc;height:120px;overflow-y:auto;line-height:1.6;white-space:pre-wrap;word-break:break-all}
+.scan-console .log-warn{color:#f7c948}
+.scan-console .log-error{color:#f14c4c}
+.scan-console .log-ok{color:#4caf50}
+.scan-console .log-info{color:#9cdcfe}
 .modal{background:#fff;border-radius:12px;width:560px;max-width:95vw;max-height:90vh;overflow-y:auto;box-shadow:0 8px 40px rgba(0,0,0,.3)}
 .modal-hdr{padding:20px 24px 14px;border-bottom:2px solid}
 .modal-hdr.danger{border-bottom-color:#a4262c}
@@ -1059,6 +1087,8 @@ tr.clickable{cursor:pointer}tr.clickable:hover td{background:#faf9f8}
           </div>
           <!-- Per-subscription status grid -->
           <div class="scan-sub-grid" id="scan-sub-grid" style="margin-top:10px"></div>
+          <!-- Live console log -->
+          <div class="scan-console" id="scan-console"><span style="color:#569cd6">Azure Policy Analyzer</span> - waiting for scan output...</div>
         </div>
         <div id="scan-alert" class="hidden" style="margin-top:10px"></div>
       </div>
@@ -1662,6 +1692,8 @@ async function startScan() {
   } catch(e){showScanAlert('Failed to start scan: '+e.message);btn.disabled=false;btn.innerHTML='🔍 Analyze Policies';return;}
   setProgress(3, 'Initializing scan...');
   startActivityTimer();
+  const consoleEl = document.getElementById('scan-console');
+  if (consoleEl) consoleEl.innerHTML = '<span style="color:#569cd6">Azure Policy Analyzer</span> - starting scan...\n';
   activeSSE=new EventSource(`/api/scan/stream/${scanId}`);
   activeSSE.onmessage=e=>{try{handleScanEvent(JSON.parse(e.data));}catch{}};
   activeSSE.onerror=()=>{if(activeSSE){activeSSE.close();activeSSE=null;}btn.disabled=false;btn.innerHTML='🔍 Analyze Policies';document.getElementById('stop-btn').classList.add('hidden');document.getElementById('scan-progress').classList.add('hidden');};
@@ -1740,6 +1772,8 @@ function handleScanEvent(msg) {
     updateSubGrid(msg.data?.subscription_id||'','error',msg.data?.error||'Scan failed');
     const pct = 22 + ((msg.completed / msg.total) * 55);
     setProgress(pct, `${msg.completed} / ${msg.total} done (some errors)`);
+  } else if(msg.type==='log') {
+    appendConsoleLog(msg.msg||'');
   } else if(msg.type==='ping') {
     // Keep-alive - just update activity timer
     updateLastActivity();
@@ -3094,6 +3128,29 @@ function stopScan() {
     const msgEl = document.getElementById('scan-global-msg');
     if (msgEl) msgEl.textContent = 'Scan stopped - showing partial results';
   }
+}
+
+
+function appendConsoleLog(msg) {
+  const el = document.getElementById('scan-console');
+  if (!el) return;
+  // Clear the initial placeholder on first real log
+  if (el.textContent.includes('waiting for scan output')) el.innerHTML = '';
+  
+  const line = document.createElement('div');
+  const lower = msg.toLowerCase();
+  if (lower.includes('error') || lower.includes('❌') || lower.includes('fail')) {
+    line.className = 'log-error';
+  } else if (lower.includes('warn') || lower.includes('⚠')) {
+    line.className = 'log-warn';
+  } else if (lower.includes('✅') || lower.includes('done') || lower.includes('complete') || lower.includes('success')) {
+    line.className = 'log-ok';
+  } else if (lower.includes('[') && lower.includes(']')) {
+    line.className = 'log-info';
+  }
+  line.textContent = msg;
+  el.appendChild(line);
+  el.scrollTop = el.scrollHeight;
 }
 
 </script>

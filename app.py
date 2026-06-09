@@ -128,6 +128,21 @@ def _build_scan_context(results: list) -> str:
 # ---------------------------------------------------------------------------
 # Routes - connect & MG tree
 # ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# Popular recommended assignments (module-level so workers can access it)
+# ---------------------------------------------------------------------------
+POPULAR_RECOMMENDED = [
+    {"name": "37e0d2fe-28a5-43d6-a273-67d37d1f5606", "display_name": "Inherit a tag from the resource group", "description": "Automated inheritance of tags from Resource Group to resources.", "category": "Tags"},
+    {"name": "96670d01-0a4d-4649-9c89-2d3abc0a5025", "display_name": "Require a tag on resource groups", "description": "Enforce existence of a tag on Resource Group.", "category": "Tags"},
+    {"name": "a08ec900-254a-4555-9bf5-e42af04b5c5c", "display_name": "Not allowed resource types", "description": "Block the creation of specified resource types.", "category": "General"},
+    {"name": "72650e9f-97bc-4b2a-0b59-daab3dc5ee70", "display_name": "Windows Defender Exploit Guard should be enabled", "description": "Deploy security baselines for Windows VMs.", "category": "Security"},
+    {"name": "4da35fc9-c9e7-4960-aec9-797fe7d9051d", "display_name": "Enable Azure Monitor for VMs", "description": "Install monitoring and dependency agents on VMs.", "category": "Monitoring"},
+    {"name": "1f3afdf9-d0c9-4c3d-847f-89da613e70a8", "display_name": "Enable Microsoft Defender for Cloud", "description": "Monitor security recommendations by Microsoft Defender for Cloud.", "category": "Security Center"},
+    {"name": "e56962a6-4747-49cd-b67b-bf8b01975c4c", "display_name": "Allowed locations", "description": "Restrict the locations your organization can create resources.", "category": "General"},
+    {"name": "06a78e20-9358-41c9-923c-fb736d382a4d", "display_name": "Audit VMs that do not use managed disks", "description": "Audit VMs not using managed disks.", "category": "Compute"},
+    {"name": "0961003e-5a0a-4549-abde-af6a37f2724d", "display_name": "Virtual machines should encrypt temp disks, caches, and data flows", "description": "Enforce disk encryption to protect data at rest.", "category": "Security"},
+]
+
 
 @app.route("/")
 def index():
@@ -221,39 +236,109 @@ def scan_stream_route(scan_id):
         def evt(data):
             return f"data: {json.dumps(data)}\n\n"
 
+        def log(msg):
+            return evt({"type": "log", "msg": msg})
+
         yield evt({"type": "start", "total": len(sub_ids)})
+        yield log(f"[{__import__('datetime').datetime.now().strftime('%H:%M:%S')}] Scan started - {len(sub_ids)} subscription(s) selected")
 
-        # Pre-warm the credential token on the main thread BEFORE spawning parallel workers.
-        # Without this, multiple threads call get_token() simultaneously -> state mismatch.
+        # Pre-warm credential token
         yield evt({"type": "progress", "msg": "Authenticating..."})
+        yield log(f"[{__import__('datetime').datetime.now().strftime('%H:%M:%S')}] Authenticating to Azure...")
         try:
-            from azure.core.credentials import TokenRequestOptions
             credential.get_token("https://management.azure.com/.default")
+            yield log(f"[{__import__('datetime').datetime.now().strftime('%H:%M:%S')}] Authentication successful")
         except Exception as e:
-            print(f"  [warn] token pre-warm failed: {e}")
+            yield log(f"[{__import__('datetime').datetime.now().strftime('%H:%M:%S')}] [WARN] Token pre-warm: {e}")
 
-        # Load built-in policies from cache (fast)
+        # Load built-in policies from cache
         yield evt({"type": "progress", "msg": "Loading built-in policies from cache..."})
+        yield log(f"[{__import__('datetime').datetime.now().strftime('%H:%M:%S')}] Loading built-in policy cache...")
         builtins, cache_source = policy_cache.get(credential, sub_ids[0])
         yield evt({"type": "builtins", "count": len(builtins), "cache_source": cache_source})
+        yield log(f"[{__import__('datetime').datetime.now().strftime('%H:%M:%S')}] Loaded {len(builtins)} built-in policies (source: {cache_source})")
+        yield log(f"[{__import__('datetime').datetime.now().strftime('%H:%M:%S')}] Starting parallel scan ({min(5, len(sub_ids))} workers)...")
 
         # Scan subscriptions in parallel, stream results
         result_q = queue_module.Queue()
+        log_q = queue_module.Queue()
         accumulated = []
 
         def worker(sid):
             sname = sub_names.get(sid, sid)
+            ts = lambda: __import__('datetime').datetime.now().strftime('%H:%M:%S')
+            log_q.put(f"[{ts()}] [{sname}] Fetching compliance state...")
             try:
-                res = _scan_subscription(sid, sname, credential, builtins)
-                result_q.put(("result", res))
-            except Exception as e:
-                import traceback
-                traceback.print_exc()
-                result_q.put(("error", {
+                fetcher = PolicyFetcher(credential)
+                analyzer = PolicyAnalyzer()
+                recommender = PolicyRecommender()
+
+                with ThreadPoolExecutor(max_workers=3) as ex:
+                    f_comp = ex.submit(fetcher.get_compliance_summary, sid)
+                    f_ov   = ex.submit(fetcher.get_compliance_overview, sid)
+                    f_custom = ex.submit(fetcher.get_custom_policies, sid)
+                    f_assign = ex.submit(fetcher.get_policy_assignments, sid)
+                    compliance = f_comp.result()
+                    overview = f_ov.result()
+                    custom_policies = f_custom.result()
+                    assignments = f_assign.result()
+
+                log_q.put(f"[{ts()}] [{sname}] Found {len(compliance)} non-compliant assignments, {len(custom_policies)} custom policies, {len(assignments)} assignments")
+
+                analyzed = analyzer.analyze(custom_policies, assignments, compliance)
+                stats = analyzed["stats"]
+                log_q.put(f"[{ts()}] [{sname}] Analysis: {stats.get('errors',0)} errors, {stats.get('warnings',0)} warnings, {stats.get('ok',0)} healthy")
+
+                recs = recommender.get_recommendations(analyzed["problematic"], builtins)
+                log_q.put(f"[{ts()}] [{sname}] Generated {len(recs)} built-in replacement recommendations")
+
+                from modules.alz_score import calculate_alz_score
+                alz = calculate_alz_score(assignments)
+                log_q.put(f"[{ts()}] [{sname}] ALZ compliance score: {alz['score']}% (grade {alz['grade']})")
+
+                from modules.insights import find_duplicate_policies, find_deprecated_assignments, find_initiative_opportunities, find_audit_ready_for_deny
+                insights = {
+                    "duplicates": find_duplicate_policies(custom_policies, assignments),
+                    "deprecated": find_deprecated_assignments(custom_policies, builtins, assignments),
+                    "initiatives": find_initiative_opportunities(custom_policies, assignments, builtins),
+                    "audit_ready": find_audit_ready_for_deny(assignments),
+                }
+                if insights["duplicates"]:
+                    log_q.put(f"[{ts()}] [{sname}] ♻️  {len(insights['duplicates'])} duplicate policy groups detected")
+                if insights["deprecated"]:
+                    log_q.put(f"[{ts()}] [{sname}] 🚫 {len(insights['deprecated'])} deprecated/broken assignments")
+                if insights["audit_ready"]:
+                    ready = sum(1 for a in insights["audit_ready"] if a["tier"] == "ready")
+                    log_q.put(f"[{ts()}] [{sname}] 🎓 {len(insights['audit_ready'])} audit assignments ({ready} ready for Deny)")
+
+                assigned_def_names = {a.get("policy_definition_id","").rstrip("/").split("/")[-1].lower() for a in assignments}
+                from app import POPULAR_RECOMMENDED
+                recommended_assignments = [
+                    {**r, "portal_url": f"https://portal.azure.com/#view/Microsoft_Azure_Policy/PolicyDetailBlade/definitionId/%2Fproviders%2FMicrosoft.Authorization%2FpolicyDefinitions%2F{r['name']}"}
+                    for r in POPULAR_RECOMMENDED if r["name"].lower() not in assigned_def_names
+                ][:6]
+
+                result_q.put(("result", {
                     "subscription_id": sid,
                     "subscription_name": sname,
-                    "error": str(e),
+                    "compliance": compliance,
+                    "compliance_overview": overview,
+                    "recommended_assignments": recommended_assignments,
+                    "custom_policies": {
+                        "stats": analyzed["stats"],
+                        "all": analyzed["all"],
+                        "problematic": analyzed["problematic"],
+                    },
+                    "recommendations": recs,
+                    "assignments": assignments,
+                    "insights": insights,
+                    "alz_score": alz,
                 }))
+                log_q.put(f"[{ts()}] [{sname}] ✅ Scan complete")
+            except Exception as e:
+                import traceback; traceback.print_exc()
+                log_q.put(f"[{ts()}] [{sname}] ❌ Error: {e}")
+                result_q.put(("error", {"subscription_id": sid, "subscription_name": sname, "error": str(e)}))
 
         n_workers = min(5, len(sub_ids))
         with ThreadPoolExecutor(max_workers=n_workers) as ex:
@@ -262,21 +347,41 @@ def scan_stream_route(scan_id):
 
             done = 0
             while done < len(sub_ids):
+                # Drain log queue first
+                while not log_q.empty():
+                    try:
+                        yield log(log_q.get_nowait())
+                    except Exception:
+                        pass
                 try:
-                    etype, data = result_q.get(timeout=120)
+                    etype, data = result_q.get(timeout=2)
                     done += 1
                     if etype == "result":
                         accumulated.append(data)
-                    yield evt({"type": etype, "data": data,
-                               "completed": done, "total": len(sub_ids)})
+                    yield evt({"type": etype, "data": data, "completed": done, "total": len(sub_ids)})
+                    # Drain logs after each result
+                    while not log_q.empty():
+                        try:
+                            yield log(log_q.get_nowait())
+                        except Exception:
+                            pass
                 except queue_module.Empty:
                     yield evt({"type": "ping"})
+                    # Drain logs on ping too
+                    while not log_q.empty():
+                        try:
+                            yield log(log_q.get_nowait())
+                        except Exception:
+                            pass
 
-        # Save scan context for agent
+        ts_final = __import__('datetime').datetime.now().strftime('%H:%M:%S')
+        yield log(f"[{ts_final}] All subscriptions scanned. Building agent context...")
+
         _LAST_SCAN_CONTEXT["context"] = _build_scan_context(accumulated)
         _LAST_SCAN_CONTEXT["tenant_id"] = tenant_id
         _LAST_SCAN_CONTEXT["sub_ids"] = sub_ids
 
+        yield log(f"[{__import__('datetime').datetime.now().strftime('%H:%M:%S')}] Done.")
         yield evt({"type": "done"})
 
     return Response(
