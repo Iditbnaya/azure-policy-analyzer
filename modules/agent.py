@@ -248,10 +248,10 @@ def _handle_tool(name: str, args: dict) -> dict:
     return {"error": f"Unknown tool: {name}"}
 
 
-def chat(messages: list, api_key: str, api_type: str = "openai",
+def chat(messages: list, api_key: str = None, api_type: str = "openai",
          azure_endpoint: str = None, azure_deployment: str = None,
          azure_api_version: str = "2024-05-01-preview",
-         scan_context: str = None) -> dict:
+         scan_context: str = None, credential=None) -> dict:
     """
     Run one agent turn.
     Returns:
@@ -263,13 +263,24 @@ def chat(messages: list, api_key: str, api_type: str = "openai",
       }
     """
     try:
-        if api_type == "azure":
+        if api_type in ("azure", "azure-credential"):
             from openai import AzureOpenAI
-            client = AzureOpenAI(
-                api_key=api_key,
-                azure_endpoint=azure_endpoint,
-                api_version=azure_api_version,
-            )
+            if api_type == "azure-credential" and credential:
+                from azure.identity import get_bearer_token_provider
+                token_provider = get_bearer_token_provider(
+                    credential, "https://cognitiveservices.azure.com/.default"
+                )
+                client = AzureOpenAI(
+                    azure_endpoint=azure_endpoint,
+                    azure_ad_token_provider=token_provider,
+                    api_version=azure_api_version,
+                )
+            else:
+                client = AzureOpenAI(
+                    api_key=api_key,
+                    azure_endpoint=azure_endpoint,
+                    api_version=azure_api_version,
+                )
             model = azure_deployment or "gpt-4o"
         else:
             from openai import OpenAI

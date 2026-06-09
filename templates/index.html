@@ -264,24 +264,41 @@ tr.clickable{cursor:pointer}tr.clickable:hover td{background:#faf9f8}
             <div class="agent-cfg">
               <div class="agent-cfg-title">API Configuration</div>
               <div class="agent-type-row">
-                <button class="type-btn active" id="type-openai" onclick="setApiType('openai')">OpenAI</button>
-                <button class="type-btn" id="type-azure" onclick="setApiType('azure')">Azure OpenAI</button>
+                <button class="type-btn active" id="type-azurecred" onclick="setApiType('azure-credential')">Azure (signed in)</button>
+                <button class="type-btn" id="type-azure" onclick="setApiType('azure')">Azure + Key</button>
+                <button class="type-btn" id="type-openai" onclick="setApiType('openai')">OpenAI</button>
               </div>
-              <div class="form-group">
-                <label class="lbl">API Key</label>
-                <input id="agent-api-key" class="inp" type="password" placeholder="sk-..." style="font-size:.82rem">
+              <div id="azurecred-fields">
+                <div class="form-group">
+                  <label class="lbl">Endpoint</label>
+                  <input id="agent-endpoint-cred" class="inp" type="text" value="https://phoenix-openai-poc-stm6y.openai.azure.com/" style="font-size:.82rem">
+                </div>
+                <div class="form-group">
+                  <label class="lbl">Deployment</label>
+                  <input id="agent-deployment-cred" class="inp" type="text" value="gpt-4o" style="font-size:.82rem">
+                </div>
+                <div class="hint">Uses your existing Azure sign-in - no key needed</div>
               </div>
-              <div id="azure-fields" class="hidden">
+              <div id="azurekey-fields" class="hidden">
                 <div class="form-group">
                   <label class="lbl">Endpoint</label>
                   <input id="agent-endpoint" class="inp" type="text" placeholder="https://xxx.openai.azure.com" style="font-size:.82rem">
                 </div>
                 <div class="form-group">
-                  <label class="lbl">Deployment name</label>
+                  <label class="lbl">Deployment</label>
                   <input id="agent-deployment" class="inp" type="text" placeholder="gpt-4o" style="font-size:.82rem">
                 </div>
+                <div class="form-group">
+                  <label class="lbl">API Key</label>
+                  <input id="agent-api-key" class="inp" type="password" placeholder="key..." style="font-size:.82rem">
+                </div>
               </div>
-              <div class="hint">Key is never sent anywhere except your chosen API endpoint</div>
+              <div id="openai-fields" class="hidden">
+                <div class="form-group">
+                  <label class="lbl">API Key</label>
+                  <input id="agent-api-key-oai" class="inp" type="password" placeholder="sk-..." style="font-size:.82rem">
+                </div>
+              </div>
             </div>
             <div class="agent-context-box">
               <div class="agent-context-title">Scan Context</div>
@@ -654,9 +671,12 @@ function renderRecs(results) {
 // =====================================================================
 function setApiType(t) {
   agentApiType=t;
-  document.getElementById('type-openai').classList.toggle('active',t==='openai');
+  document.getElementById('type-azurecred').classList.toggle('active',t==='azure-credential');
   document.getElementById('type-azure').classList.toggle('active',t==='azure');
-  document.getElementById('azure-fields').classList.toggle('hidden',t!=='azure');
+  document.getElementById('type-openai').classList.toggle('active',t==='openai');
+  document.getElementById('azurecred-fields').classList.toggle('hidden',t!=='azure-credential');
+  document.getElementById('azurekey-fields').classList.toggle('hidden',t!=='azure');
+  document.getElementById('openai-fields').classList.toggle('hidden',t!=='openai');
 }
 
 function updateAgentContext(results) {
@@ -676,8 +696,9 @@ async function sendChat() {
   const input=document.getElementById('chat-input');
   const text=input.value.trim();
   if(!text)return;
-  const apiKey=document.getElementById('agent-api-key').value.trim();
-  if(!apiKey){appendChatMsg('system','Please enter your API key in the configuration panel.');return;}
+  if(agentApiType!=='azure-credential'&&!document.getElementById(agentApiType==='openai'?'agent-api-key-oai':'agent-api-key').value.trim()){
+    appendChatMsg('system','Please enter your API key in the configuration panel.');return;
+  }
   input.value='';input.style.height='auto';
   appendChatMsg('user',text);
   chatHistory.push({role:'user',content:text});
@@ -685,14 +706,27 @@ async function sendChat() {
   btn.disabled=true;btn.innerHTML='<span class="spin"></span>';
   appendChatMsg('assistant','<span class="spin spin-dark" style="width:14px;height:14px;border-width:2px;display:inline-block"></span> Thinking...',true);
   try {
+    const tenantId=document.getElementById('tenant-id').value.trim();
+    let endpoint='', deployment='', key='';
+    if(agentApiType==='azure-credential'){
+      endpoint=document.getElementById('agent-endpoint-cred').value.trim();
+      deployment=document.getElementById('agent-deployment-cred').value.trim();
+    } else if(agentApiType==='azure'){
+      endpoint=document.getElementById('agent-endpoint').value.trim();
+      deployment=document.getElementById('agent-deployment').value.trim();
+      key=document.getElementById('agent-api-key').value.trim();
+    } else {
+      key=document.getElementById('agent-api-key-oai').value.trim();
+    }
     const r=await fetch('/api/agent/chat',{
       method:'POST',headers:{'Content-Type':'application/json'},
       body:JSON.stringify({
         messages:chatHistory,
-        api_key:apiKey,
+        api_key:key,
         api_type:agentApiType,
-        azure_endpoint:document.getElementById('agent-endpoint').value.trim(),
-        azure_deployment:document.getElementById('agent-deployment').value.trim(),
+        azure_endpoint:endpoint,
+        azure_deployment:deployment,
+        tenant_id:tenantId,
       })
     });
     const d=await r.json();
@@ -840,3 +874,7 @@ function esc(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').
 </script>
 </body>
 </html>
+
+
+
+

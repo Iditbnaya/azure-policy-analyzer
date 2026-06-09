@@ -1,3 +1,6 @@
+
+
+
 """
 Fetches all Azure built-in policy definitions and saves them to data/builtin-policies.json.
 Runs inside GitHub Actions with a Service Principal.
@@ -50,8 +53,8 @@ def main():
 
     print("Fetching built-in policy definitions...")
     policies = []
-    for p in client.policy_definitions.list_built_in():
-        meta = safe_dict(p.metadata)
+    for p in client.policy_definitions.list(filter="policyType eq 'BuiltIn'"):
+        meta = safe_dict(getattr(p, "metadata", None))
         rule = safe_dict(p.policy_rule)
         policies.append({
             "id": p.id or "",

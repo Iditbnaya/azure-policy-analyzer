@@ -105,7 +105,7 @@ def mg_tree_endpoint():
     try:
         credential = auth_manager.get_credential(tenant_id)
         fetcher = PolicyFetcher(credential)
-        tree = fetcher.get_management_group_tree(tenant_id or None)
+        tree = fetcher.get_management_group_tree(tenant_id)
         return jsonify({"status": "ok", "tree": tree})
     except Exception as e:
         return jsonify({"status": "error", "message": str(e)}), 400
@@ -239,21 +239,27 @@ def agent_chat():
     api_type = data.get("api_type", "openai")
     azure_endpoint = data.get("azure_endpoint", "").strip()
     azure_deployment = data.get("azure_deployment", "").strip()
+    tenant_id = data.get("tenant_id", "").strip()
     messages = data.get("messages", [])
 
-    if not api_key:
+    if api_type == "azure-credential":
+        credential = auth_manager.get_credential(tenant_id)
+    elif not api_key:
         return jsonify({"status": "error", "message": "API key required"}), 400
+    else:
+        credential = None
 
     from modules.agent import chat as agent_chat_fn
-    scan_ctx = _LAST_SCAN_CONTEXT.get("context")
+    scan_ctx = _LAST_SCAN_CONTEXT.get("context", "")
 
     result = agent_chat_fn(
         messages=messages,
-        api_key=api_key,
+        api_key=api_key or None,
         api_type=api_type,
         azure_endpoint=azure_endpoint or None,
         azure_deployment=azure_deployment or None,
         scan_context=scan_ctx,
+        credential=credential,
     )
     return jsonify({"status": "ok", **result})
 
