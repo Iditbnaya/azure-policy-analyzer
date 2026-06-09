@@ -127,8 +127,7 @@ class PolicyFetcher:
 
     def get_compliance_overview(self, subscription_id: str) -> dict:
         """
-        Returns richer compliance data for the dashboard:
-        policy compliance counts, resource compliance %, pending remediation.
+        Returns richer compliance data for the dashboard.
         """
         try:
             from azure.mgmt.policyinsights import PolicyInsightsClient
@@ -143,44 +142,36 @@ class PolicyFetcher:
             policy_compliant = 0
             policy_non_compliant = 0
             policy_error = 0
-            resource_compliant = 0
             resource_non_compliant = 0
             pending_remediation = 0
 
             for summary in result.value or []:
-                # Top-level resource summary
-                res = summary.results
-                if res:
-                    resource_compliant += getattr(res, "query_results_uri", 0) or 0
-
                 for pa in summary.policy_assignments or []:
                     r = pa.results
-                    nc_pol = getattr(r, "non_compliant_policies", 0) or 0
-                    nc_res = getattr(r, "non_compliant_resources", 0) or 0
-                    # Each assignment with no non-compliant = compliant
+                    nc_pol = int(getattr(r, "non_compliant_policies", 0) or 0)
+                    nc_res = int(getattr(r, "non_compliant_resources", 0) or 0)
+
                     if nc_pol == 0 and nc_res == 0:
                         policy_compliant += 1
                     else:
                         policy_non_compliant += 1
+
                     resource_non_compliant += nc_res
 
-                    # Pending remediation = DINE/Modify assignments with non-compliant resources
-                    pa_id = pa.policy_assignment_id or ""
                     if nc_res > 0:
                         pending_remediation += 1
 
             total_policies = policy_compliant + policy_non_compliant + policy_error
-            total_resources = resource_compliant + resource_non_compliant
 
             return {
                 "policy_compliant": policy_compliant,
                 "policy_non_compliant": policy_non_compliant,
                 "policy_error": policy_error,
                 "policy_total": total_policies,
-                "resource_compliant": resource_compliant,
+                "resource_compliant": 0,
                 "resource_non_compliant": resource_non_compliant,
-                "resource_total": total_resources,
-                "resource_compliance_pct": round(100 * resource_compliant / total_resources, 1) if total_resources else 0,
+                "resource_total": resource_non_compliant,
+                "resource_compliance_pct": 0,
                 "pending_remediation": pending_remediation,
             }
         except Exception as e:
