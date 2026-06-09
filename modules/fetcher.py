@@ -104,6 +104,7 @@ class PolicyFetcher:
             )
             result = client.policy_states.summarize_for_subscription(
                 policy_states_summary_resource="latest",
+                subscription_id=subscription_id,
             )
             items = []
             for summary in result.value or []:
