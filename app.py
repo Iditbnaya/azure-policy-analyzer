@@ -51,6 +51,7 @@ def _scan_subscription(sub_id, sub_name, credential, builtin_policies):
             "problematic": analyzed["problematic"],
         },
         "recommendations": recs,
+        "assignments": assignments,  # included for auto-fix
     }
 
 
@@ -226,6 +227,152 @@ def scan_stream_route(scan_id):
         mimetype="text/event-stream",
         headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
     )
+
+
+# ---------------------------------------------------------------------------
+# Auto-fix routes
+# ---------------------------------------------------------------------------
+
+@app.route("/api/autofix/preview", methods=["POST"])
+def autofix_preview():
+    """
+    Preview what an auto-fix assignment would look like:
+    fetch built-in policy parameter definitions and map from existing custom assignment params.
+    """
+    data = request.json or {}
+    tenant_id = data.get("tenant_id", "").strip()
+    subscription_id = data.get("subscription_id", "").strip()
+    builtin_policy_id = data.get("builtin_policy_id", "").strip()
+    custom_assignment = data.get("custom_assignment", {})  # existing assignment dict
+    custom_policy = data.get("custom_policy", {})
+
+    if not subscription_id:
+        sub_ids = _LAST_SCAN_CONTEXT.get("sub_ids", [])
+        subscription_id = sub_ids[0] if sub_ids else ""
+
+    try:
+        credential = auth_manager.get_credential(tenant_id)
+        from azure.mgmt.resource import PolicyClient
+        client = PolicyClient(credential=credential, subscription_id=subscription_id)
+
+        # Get built-in policy details
+        builtin_name = builtin_policy_id.rstrip("/").split("/")[-1]
+        builtin = client.policy_definitions.get_built_in(builtin_name)
+        import json as _json
+        from modules.fetcher import _safe_dict
+        builtin_params_def = _safe_dict(builtin.parameters) or {}
+
+        # Existing custom assignment parameters (values already set)
+        existing_params = custom_assignment.get("parameters", {}) or {}
+
+        # Map: try exact name match first, then fuzzy (lowercase contains)
+        mapped_params = {}
+        unmapped_builtin = []
+        for bp_name, bp_def in builtin_params_def.items():
+            if bp_name in existing_params:
+                mapped_params[bp_name] = {
+                    "value": existing_params[bp_name].get("value"),
+                    "source": "exact_match",
+                    "type": bp_def.get("type", "String") if isinstance(bp_def, dict) else "String",
+                }
+            else:
+                # Fuzzy: find a custom param whose name contains bp_name or vice versa
+                fuzzy = next(
+                    (k for k in existing_params
+                     if bp_name.lower() in k.lower() or k.lower() in bp_name.lower()),
+                    None
+                )
+                if fuzzy:
+                    mapped_params[bp_name] = {
+                        "value": existing_params[fuzzy].get("value"),
+                        "source": f"fuzzy_match:{fuzzy}",
+                        "type": bp_def.get("type", "String") if isinstance(bp_def, dict) else "String",
+                    }
+                else:
+                    default = bp_def.get("defaultValue") if isinstance(bp_def, dict) else None
+                    if default is not None:
+                        mapped_params[bp_name] = {
+                            "value": default,
+                            "source": "default",
+                            "type": bp_def.get("type", "String") if isinstance(bp_def, dict) else "String",
+                        }
+                    else:
+                        unmapped_builtin.append({
+                            "name": bp_name,
+                            "type": bp_def.get("type", "String") if isinstance(bp_def, dict) else "String",
+                            "description": (bp_def.get("metadata", {}) or {}).get("description", "") if isinstance(bp_def, dict) else "",
+                        })
+
+        # Proposed new assignment
+        proposed_scope = custom_assignment.get("scope") or f"/subscriptions/{subscription_id}"
+        proposed_name = (custom_assignment.get("display_name") or custom_policy.get("display_name") or builtin.display_name or "")
+        proposed_name = proposed_name[:100] + " (Built-in)" if len(proposed_name) < 100 else proposed_name[:108] + " [BIn]"
+
+        return jsonify({
+            "status": "ok",
+            "builtin_display_name": builtin.display_name,
+            "builtin_description": builtin.description or "",
+            "proposed_scope": proposed_scope,
+            "proposed_display_name": proposed_name,
+            "mapped_params": mapped_params,
+            "unmapped_params": unmapped_builtin,
+            "builtin_policy_id": f"/providers/Microsoft.Authorization/policyDefinitions/{builtin_name}",
+        })
+    except Exception as e:
+        import traceback; traceback.print_exc()
+        return jsonify({"status": "error", "message": str(e)}), 500
+
+
+@app.route("/api/autofix/execute", methods=["POST"])
+def autofix_execute():
+    """Create the new built-in assignment and optionally delete the old custom one."""
+    data = request.json or {}
+    tenant_id = data.get("tenant_id", "").strip()
+    subscription_id = data.get("subscription_id", "").strip()
+    builtin_policy_id = data.get("builtin_policy_id", "").strip()
+    scope = data.get("scope", "").strip()
+    display_name = data.get("display_name", "").strip()
+    parameters = data.get("parameters", {})  # {name: value}
+    delete_old_assignment = data.get("delete_old_assignment", False)
+    old_assignment_scope = data.get("old_assignment_scope", "")
+    old_assignment_name = data.get("old_assignment_name", "")
+
+    if not subscription_id:
+        sub_ids = _LAST_SCAN_CONTEXT.get("sub_ids", [])
+        subscription_id = sub_ids[0] if sub_ids else ""
+
+    try:
+        credential = auth_manager.get_credential(tenant_id)
+        from modules.policy_actions import assign_policy, delete_assignment
+        import re, uuid
+
+        safe_name = re.sub(r"[^a-zA-Z0-9\-]", "-", display_name)[:64].strip("-") or "autofix-" + str(uuid.uuid4())[:8]
+
+        result = assign_policy(
+            credential=credential,
+            subscription_id=subscription_id,
+            policy_definition_id=builtin_policy_id,
+            scope=scope,
+            display_name=display_name,
+            parameters={k: v for k, v in parameters.items() if v is not None and v != ""},
+        )
+
+        deleted = False
+        if delete_old_assignment and old_assignment_name and old_assignment_scope:
+            try:
+                delete_assignment(credential, subscription_id, old_assignment_scope, old_assignment_name)
+                deleted = True
+            except Exception as de:
+                print(f"  [warn] could not delete old assignment: {de}")
+
+        return jsonify({
+            "status": "ok",
+            "new_assignment": result,
+            "old_deleted": deleted,
+        })
+    except Exception as e:
+        import traceback; traceback.print_exc()
+        return jsonify({"status": "error", "message": str(e)}), 500
 
 
 # ---------------------------------------------------------------------------

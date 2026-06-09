@@ -4,7 +4,141 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1.0">
 <title>Azure Policy Analyzer</title>
-<script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js">
+// =====================================================================
+// Auto Fix
+// =====================================================================
+let autofixState = {};
+
+async function startAutoFix(btn, escapedJson) {
+  const ctx = JSON.parse(unesc(escapedJson));
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spin" style="width:12px;height:12px;border-width:2px"></span> Loading...';
+  const tenantId = document.getElementById('tenant-id').value.trim();
+  const subId = ctx.sub_id || [...document.querySelectorAll('.sub-chk:checked')].map(c=>c.value)[0] || '';
+
+  // Pick first existing assignment if any, else empty
+  const existingAssignment = (ctx.custom_assignments||[])[0] || {};
+
+  try {
+    const r = await fetch('/api/autofix/preview', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({
+        tenant_id: tenantId,
+        subscription_id: subId,
+        builtin_policy_id: ctx.builtin_id,
+        custom_assignment: existingAssignment,
+        custom_policy: ctx.custom_policy,
+      })
+    });
+    const d = await r.json();
+    if (d.status !== 'ok') throw new Error(d.message);
+
+    autofixState = {
+      tenantId, subId,
+      builtinPolicyId: d.builtin_policy_id,
+      oldAssignment: existingAssignment,
+    };
+
+    // Populate modal
+    document.getElementById('af-title').textContent = `Auto Fix: ${esc(ctx.custom_policy.display_name||'')}`;
+    document.getElementById('af-subtitle').textContent = `Replace with built-in: ${esc(d.builtin_display_name)}`;
+    document.getElementById('af-builtin-name').textContent = d.builtin_display_name;
+    document.getElementById('af-builtin-desc').textContent = d.builtin_description;
+    document.getElementById('af-scope').value = d.proposed_scope;
+    document.getElementById('af-display-name').value = d.proposed_display_name;
+
+    // Params table
+    const tbody = document.getElementById('af-params-body');
+    tbody.innerHTML = '';
+    const mapped = d.mapped_params || {};
+    Object.entries(mapped).forEach(([name, info]) => {
+      const srcLabel = info.source==='exact_match'?`<span class="param-src-exact">✓ exact match</span>`:
+        info.source.startsWith('fuzzy')?`<span class="param-src-fuzzy">~ fuzzy: ${esc(info.source.split(':')[1])}</span>`:
+        `<span class="param-src-default">default</span>`;
+      const val = info.value !== null && info.value !== undefined ? JSON.stringify(info.value) : '';
+      tbody.innerHTML += `<tr>
+        <td><strong>${esc(name)}</strong><br><span class="muted" style="font-size:.72rem">${esc(info.type)}</span></td>
+        <td><input class="param-input af-param" data-name="${esc(name)}" value="${esc(val.replace(/^"|"$/g,''))}"></td>
+        <td>${srcLabel}</td>
+      </tr>`;
+    });
+
+    // Unmapped params
+    const unmapped = d.unmapped_params || [];
+    if (unmapped.length) {
+      unmapped.forEach(p => {
+        tbody.innerHTML += `<tr>
+          <td><strong>${esc(p.name)}</strong><br><span class="param-src-missing">⚠ required - no value found</span></td>
+          <td><input class="param-input af-param" data-name="${esc(p.name)}" placeholder="Enter value..." style="border-color:#f1707b"></td>
+          <td><span class="param-src-missing">MISSING</span></td>
+        </tr>`;
+      });
+    }
+
+    document.getElementById('autofix-modal').classList.remove('hidden');
+  } catch(e) {
+    appendChatMsg && appendChatMsg('system', `Auto Fix preview failed: ${esc(e.message)}`);
+    alert('Auto Fix preview failed: ' + e.message);
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = '🔧 Auto Fix';
+  }
+}
+
+function closeAutofixModal() {
+  document.getElementById('autofix-modal').classList.add('hidden');
+  autofixState = {};
+}
+
+async function executeAutofix() {
+  const btn = document.getElementById('af-confirm-btn');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spin" style="width:14px;height:14px;border-width:2px"></span> Creating...';
+
+  const scope = document.getElementById('af-scope').value.trim();
+  const displayName = document.getElementById('af-display-name').value.trim();
+  const deleteOld = document.getElementById('af-delete-old').checked;
+
+  const params = {};
+  document.querySelectorAll('.af-param').forEach(inp => {
+    const v = inp.value.trim();
+    if (v) params[inp.dataset.name] = v;
+  });
+
+  try {
+    const r = await fetch('/api/autofix/execute', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({
+        tenant_id: autofixState.tenantId,
+        subscription_id: autofixState.subId,
+        builtin_policy_id: autofixState.builtinPolicyId,
+        scope, display_name: displayName,
+        parameters: params,
+        delete_old_assignment: deleteOld,
+        old_assignment_scope: (autofixState.oldAssignment||{}).scope||'',
+        old_assignment_name: (autofixState.oldAssignment||{}).name||'',
+      })
+    });
+    const d = await r.json();
+    if (d.status !== 'ok') throw new Error(d.message);
+    closeAutofixModal();
+    const msg = `Assignment created: **${esc(displayName)}**${d.old_deleted?' (old custom assignment removed)':''}`;
+    appendChatMsg('system', `✅ Auto Fix applied! ${msg}`);
+  } catch(e) {
+    alert('Failed: ' + e.message);
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = 'Create Assignment';
+  }
+}
+
+function unesc(s) {
+  const d = document.createElement('div');
+  d.innerHTML = s;
+  return d.textContent;
+}
+</script>
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
 body{font-family:'Segoe UI',Tahoma,sans-serif;background:#f0f2f5;color:#1f1f1f;font-size:14px}
@@ -161,6 +295,19 @@ tr.clickable{cursor:pointer}tr.clickable:hover td{background:#faf9f8}
 .modal-confirm-check input{width:16px;height:16px;cursor:pointer}
 .modal-actions{display:flex;gap:10px;justify-content:flex-end;padding:16px 24px;border-top:1px solid #edebe9}
 .hidden{display:none!important}
+/* Autofix */
+.autofix-btn{background:#107c10;color:#fff;border:none;padding:5px 13px;border-radius:4px;font-size:.78rem;font-weight:700;cursor:pointer;display:inline-flex;align-items:center;gap:5px}
+.autofix-btn:hover{background:#0e6b0e}
+.autofix-btn:disabled{background:#a0a0a0;cursor:not-allowed}
+.param-table{width:100%;border-collapse:collapse;font-size:.78rem;margin-top:6px}
+.param-table th{text-align:left;padding:5px 8px;background:#faf9f8;border-bottom:1px solid #edebe9;font-weight:700}
+.param-table td{padding:5px 8px;border-bottom:1px solid #f3f2f1}
+.param-src-exact{color:#107c10;font-size:.7rem}
+.param-src-fuzzy{color:#f7c300;font-size:.7rem}
+.param-src-default{color:#8a8886;font-size:.7rem}
+.param-src-missing{color:#a4262c;font-weight:700;font-size:.7rem}
+.param-input{width:100%;padding:4px 7px;border:1px solid #c8c6c4;border-radius:3px;font-size:.78rem}
+.assignment-tag{display:inline-flex;align-items:center;gap:5px;background:#dce9f8;color:#004578;border-radius:4px;padding:2px 8px;font-size:.73rem;margin-top:4px}
 </style>
 </head>
 <body>
@@ -333,6 +480,52 @@ tr.clickable{cursor:pointer}tr.clickable:hover td{background:#faf9f8}
 
 </div>
 
+
+<!-- Auto Fix Modal -->
+<div class="modal-backdrop hidden" id="autofix-modal">
+  <div class="modal" style="width:640px">
+    <div class="modal-hdr warning" id="af-modal-hdr">
+      <div class="modal-title">🔧 <span id="af-title">Auto Fix - Replace Custom Policy with Built-in</span> <span class="b-warning-pill">REVIEW REQUIRED</span></div>
+      <div class="muted" style="font-size:.82rem;margin-top:4px" id="af-subtitle"></div>
+    </div>
+    <div class="modal-body">
+      <div class="modal-section">
+        <div class="modal-section-title">Built-in replacement</div>
+        <div class="modal-explanation" id="af-builtin-name" style="font-weight:700"></div>
+        <div style="font-size:.82rem;color:#605e5c;margin-top:4px" id="af-builtin-desc"></div>
+      </div>
+      <div class="modal-section">
+        <div class="modal-section-title">New assignment scope</div>
+        <input id="af-scope" class="inp" type="text" style="font-size:.84rem">
+      </div>
+      <div class="modal-section">
+        <div class="modal-section-title">New assignment display name</div>
+        <input id="af-display-name" class="inp" type="text" style="font-size:.84rem">
+      </div>
+      <div class="modal-section" id="af-params-section">
+        <div class="modal-section-title">Parameters <span class="muted" style="font-size:.72rem;text-transform:none" id="af-params-hint"></span></div>
+        <table class="param-table" id="af-params-table">
+          <thead><tr><th>Parameter</th><th>Value</th><th>Source</th></tr></thead>
+          <tbody id="af-params-body"></tbody>
+        </table>
+      </div>
+      <div class="modal-section" id="af-unmapped-section" style="display:none">
+        <div class="modal-section-title" style="color:#a4262c">Required parameters with no value found</div>
+        <div style="font-size:.82rem;color:#605e5c" id="af-unmapped-list"></div>
+      </div>
+      <div style="margin-top:14px">
+        <label style="display:flex;align-items:center;gap:8px;font-size:.84rem;cursor:pointer">
+          <input type="checkbox" id="af-delete-old">
+          Also delete the existing custom policy assignment after creating the built-in one
+        </label>
+      </div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn" style="background:#f3f2f1;border:1px solid #c8c6c4;color:#323130" onclick="closeAutofixModal()">Cancel</button>
+      <button class="btn btn-primary" id="af-confirm-btn" onclick="executeAutofix()">Create Assignment</button>
+    </div>
+  </div>
+</div>
 <!-- Confirmation Modal -->
 <div class="modal-backdrop hidden" id="confirm-modal">
   <div class="modal">
@@ -871,9 +1064,146 @@ function showTab(name){document.querySelectorAll('.tab').forEach(t=>t.classList.
 function toggleRow(uid,row){const exp=document.getElementById(uid),arr=document.getElementById('arr-'+uid),open=exp.classList.contains('open');exp.classList.toggle('open',!open);arr.classList.toggle('open',!open);}
 function setStatus(state,msg){document.getElementById('status-dot').className='status-dot'+(state==='ok'?' ok':'');document.getElementById('status-text').textContent=msg;}
 function esc(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
+
+// =====================================================================
+// Auto Fix
+// =====================================================================
+let autofixState = {};
+
+async function startAutoFix(btn, escapedJson) {
+  const ctx = JSON.parse(unesc(escapedJson));
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spin" style="width:12px;height:12px;border-width:2px"></span> Loading...';
+  const tenantId = document.getElementById('tenant-id').value.trim();
+  const subId = ctx.sub_id || [...document.querySelectorAll('.sub-chk:checked')].map(c=>c.value)[0] || '';
+
+  // Pick first existing assignment if any, else empty
+  const existingAssignment = (ctx.custom_assignments||[])[0] || {};
+
+  try {
+    const r = await fetch('/api/autofix/preview', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({
+        tenant_id: tenantId,
+        subscription_id: subId,
+        builtin_policy_id: ctx.builtin_id,
+        custom_assignment: existingAssignment,
+        custom_policy: ctx.custom_policy,
+      })
+    });
+    const d = await r.json();
+    if (d.status !== 'ok') throw new Error(d.message);
+
+    autofixState = {
+      tenantId, subId,
+      builtinPolicyId: d.builtin_policy_id,
+      oldAssignment: existingAssignment,
+    };
+
+    // Populate modal
+    document.getElementById('af-title').textContent = `Auto Fix: ${esc(ctx.custom_policy.display_name||'')}`;
+    document.getElementById('af-subtitle').textContent = `Replace with built-in: ${esc(d.builtin_display_name)}`;
+    document.getElementById('af-builtin-name').textContent = d.builtin_display_name;
+    document.getElementById('af-builtin-desc').textContent = d.builtin_description;
+    document.getElementById('af-scope').value = d.proposed_scope;
+    document.getElementById('af-display-name').value = d.proposed_display_name;
+
+    // Params table
+    const tbody = document.getElementById('af-params-body');
+    tbody.innerHTML = '';
+    const mapped = d.mapped_params || {};
+    Object.entries(mapped).forEach(([name, info]) => {
+      const srcLabel = info.source==='exact_match'?`<span class="param-src-exact">✓ exact match</span>`:
+        info.source.startsWith('fuzzy')?`<span class="param-src-fuzzy">~ fuzzy: ${esc(info.source.split(':')[1])}</span>`:
+        `<span class="param-src-default">default</span>`;
+      const val = info.value !== null && info.value !== undefined ? JSON.stringify(info.value) : '';
+      tbody.innerHTML += `<tr>
+        <td><strong>${esc(name)}</strong><br><span class="muted" style="font-size:.72rem">${esc(info.type)}</span></td>
+        <td><input class="param-input af-param" data-name="${esc(name)}" value="${esc(val.replace(/^"|"$/g,''))}"></td>
+        <td>${srcLabel}</td>
+      </tr>`;
+    });
+
+    // Unmapped params
+    const unmapped = d.unmapped_params || [];
+    if (unmapped.length) {
+      unmapped.forEach(p => {
+        tbody.innerHTML += `<tr>
+          <td><strong>${esc(p.name)}</strong><br><span class="param-src-missing">⚠ required - no value found</span></td>
+          <td><input class="param-input af-param" data-name="${esc(p.name)}" placeholder="Enter value..." style="border-color:#f1707b"></td>
+          <td><span class="param-src-missing">MISSING</span></td>
+        </tr>`;
+      });
+    }
+
+    document.getElementById('autofix-modal').classList.remove('hidden');
+  } catch(e) {
+    appendChatMsg && appendChatMsg('system', `Auto Fix preview failed: ${esc(e.message)}`);
+    alert('Auto Fix preview failed: ' + e.message);
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = '🔧 Auto Fix';
+  }
+}
+
+function closeAutofixModal() {
+  document.getElementById('autofix-modal').classList.add('hidden');
+  autofixState = {};
+}
+
+async function executeAutofix() {
+  const btn = document.getElementById('af-confirm-btn');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spin" style="width:14px;height:14px;border-width:2px"></span> Creating...';
+
+  const scope = document.getElementById('af-scope').value.trim();
+  const displayName = document.getElementById('af-display-name').value.trim();
+  const deleteOld = document.getElementById('af-delete-old').checked;
+
+  const params = {};
+  document.querySelectorAll('.af-param').forEach(inp => {
+    const v = inp.value.trim();
+    if (v) params[inp.dataset.name] = v;
+  });
+
+  try {
+    const r = await fetch('/api/autofix/execute', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({
+        tenant_id: autofixState.tenantId,
+        subscription_id: autofixState.subId,
+        builtin_policy_id: autofixState.builtinPolicyId,
+        scope, display_name: displayName,
+        parameters: params,
+        delete_old_assignment: deleteOld,
+        old_assignment_scope: (autofixState.oldAssignment||{}).scope||'',
+        old_assignment_name: (autofixState.oldAssignment||{}).name||'',
+      })
+    });
+    const d = await r.json();
+    if (d.status !== 'ok') throw new Error(d.message);
+    closeAutofixModal();
+    const msg = `Assignment created: **${esc(displayName)}**${d.old_deleted?' (old custom assignment removed)':''}`;
+    appendChatMsg('system', `✅ Auto Fix applied! ${msg}`);
+  } catch(e) {
+    alert('Failed: ' + e.message);
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = 'Create Assignment';
+  }
+}
+
+function unesc(s) {
+  const d = document.createElement('div');
+  d.innerHTML = s;
+  return d.textContent;
+}
 </script>
 </body>
 </html>
+
+
+
 
 
 
