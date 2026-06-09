@@ -2,7 +2,6 @@ import json
 
 
 def _safe_dict(obj):
-    """Convert SDK object to plain dict safely."""
     if obj is None:
         return {}
     if isinstance(obj, dict):
@@ -22,7 +21,6 @@ def _extract_effect(policy_rule) -> str:
         return "Unknown"
     effect = then.get("effect", "")
     if isinstance(effect, str):
-        # Could be a parameter reference like "[parameters('effect')]"
         if effect.startswith("[") and "parameters" in effect:
             return "Parameterized"
         return effect or "Unknown"
@@ -30,10 +28,72 @@ def _extract_effect(policy_rule) -> str:
 
 
 class PolicyFetcher:
-    """Fetches policy definitions, assignments, and compliance data from Azure."""
+    """Fetches policy definitions, assignments, compliance, and MG hierarchy."""
 
     def __init__(self, credential):
         self.credential = credential
+
+    # ------------------------------------------------------------------
+    # Management Group hierarchy
+    # ------------------------------------------------------------------
+
+    def get_management_group_tree(self, tenant_id: str = None):
+        """
+        Return the full MG hierarchy as a nested dict, or None on failure.
+        Requires azure-mgmt-managementgroups and MG read permissions.
+        """
+        try:
+            from azure.mgmt.managementgroups import ManagementGroupsAPI
+            from azure.mgmt.subscription import SubscriptionClient
+
+            if not tenant_id:
+                try:
+                    sc = SubscriptionClient(self.credential)
+                    tenants = list(sc.tenants.list())
+                    if tenants:
+                        tenant_id = tenants[0].tenant_id
+                except Exception:
+                    pass
+
+            if not tenant_id:
+                return None
+
+            client = ManagementGroupsAPI(self.credential)
+            root = client.management_groups.get(
+                group_id=tenant_id,
+                expand="children",
+                recurse=True,
+            )
+            return self._mg_to_dict(root)
+        except Exception as e:
+            print(f"  [warn] MG tree failed: {e}")
+            return None
+
+    def _mg_to_dict(self, node) -> dict:
+        name = getattr(node, "display_name", None) or getattr(node, "name", "") or ""
+        children = []
+        for child in getattr(node, "children", None) or []:
+            ct = child.type
+            if hasattr(ct, "value"):
+                ct = ct.value
+            if "/subscriptions" in str(ct).lower():
+                children.append({
+                    "type": "subscription",
+                    "id": child.name or "",
+                    "name": child.display_name or child.name or "",
+                })
+            else:
+                children.append(self._mg_to_dict(child))
+        return {
+            "type": "managementGroup",
+            "id": getattr(node, "id", "") or "",
+            "name": name,
+            "children": children,
+        }
+
+    # ------------------------------------------------------------------
+    # Compliance, custom policies, assignments, built-ins
+    # ------------------------------------------------------------------
 
     def get_compliance_summary(self, subscription_id: str) -> list:
         try:
@@ -46,31 +106,28 @@ class PolicyFetcher:
                 policy_states_summary_resource="latest",
             )
             items = []
-            for summary in (result.value or []):
-                for pa in (summary.policy_assignments or []):
+            for summary in result.value or []:
+                for pa in summary.policy_assignments or []:
                     r = pa.results
-                    non_compliant = getattr(r, "non_compliant_resources", 0) or 0
-                    if non_compliant > 0:
+                    nc = getattr(r, "non_compliant_resources", 0) or 0
+                    if nc > 0:
                         pa_id = pa.policy_assignment_id or ""
                         items.append({
                             "policy_assignment_id": pa_id,
                             "policy_assignment_name": pa_id.split("/")[-1] if pa_id else "Unknown",
-                            "non_compliant_resources": non_compliant,
+                            "non_compliant_resources": nc,
                             "non_compliant_policies": getattr(r, "non_compliant_policies", 0) or 0,
                         })
             items.sort(key=lambda x: x["non_compliant_resources"], reverse=True)
             return items
         except Exception as e:
-            print(f"  [warn] compliance summary failed: {e}")
+            print(f"  [warn] compliance {subscription_id}: {e}")
             return []
 
     def get_custom_policies(self, subscription_id: str) -> list:
         try:
             from azure.mgmt.resource import PolicyClient
-            client = PolicyClient(
-                credential=self.credential,
-                subscription_id=subscription_id,
-            )
+            client = PolicyClient(credential=self.credential, subscription_id=subscription_id)
             policies = []
             for p in client.policy_definitions.list():
                 pt = p.policy_type
@@ -94,16 +151,13 @@ class PolicyFetcher:
                 })
             return policies
         except Exception as e:
-            print(f"  [warn] custom policy fetch failed: {e}")
+            print(f"  [warn] custom policies {subscription_id}: {e}")
             return []
 
     def get_policy_assignments(self, subscription_id: str) -> list:
         try:
             from azure.mgmt.resource import PolicyClient
-            client = PolicyClient(
-                credential=self.credential,
-                subscription_id=subscription_id,
-            )
+            client = PolicyClient(credential=self.credential, subscription_id=subscription_id)
             assignments = []
             for a in client.policy_assignments.list():
                 assignments.append({
@@ -115,16 +169,13 @@ class PolicyFetcher:
                 })
             return assignments
         except Exception as e:
-            print(f"  [warn] assignments fetch failed: {e}")
+            print(f"  [warn] assignments {subscription_id}: {e}")
             return []
 
     def get_builtin_policies(self, subscription_id: str) -> list:
         try:
             from azure.mgmt.resource import PolicyClient
-            client = PolicyClient(
-                credential=self.credential,
-                subscription_id=subscription_id,
-            )
+            client = PolicyClient(credential=self.credential, subscription_id=subscription_id)
             policies = []
             for p in client.policy_definitions.list_built_in():
                 meta = _safe_dict(p.metadata)
@@ -139,5 +190,5 @@ class PolicyFetcher:
                 })
             return policies
         except Exception as e:
-            print(f"  [warn] built-in policy fetch failed: {e}")
+            print(f"  [warn] built-in policies: {e}")
             return []

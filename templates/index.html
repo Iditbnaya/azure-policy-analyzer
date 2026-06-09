@@ -7,148 +7,94 @@
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
 body{font-family:'Segoe UI',Tahoma,sans-serif;background:#f0f2f5;color:#1f1f1f;font-size:14px}
-
-/* Header */
 .hdr{background:linear-gradient(135deg,#0078d4,#005a9e);color:#fff;padding:14px 32px;display:flex;align-items:center;gap:16px;box-shadow:0 2px 10px rgba(0,0,0,.25)}
 .hdr-logo{width:36px;height:36px;background:rgba(255,255,255,.15);border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:1.3rem}
-.hdr h1{font-size:1.2rem;font-weight:600}
-.hdr-sub{font-size:.78rem;opacity:.75;margin-top:1px}
+.hdr h1{font-size:1.2rem;font-weight:600}.hdr-sub{font-size:.78rem;opacity:.75;margin-top:1px}
 .hdr-status{margin-left:auto;font-size:.8rem;background:rgba(255,255,255,.12);padding:4px 12px;border-radius:20px;display:flex;align-items:center;gap:6px}
-.status-dot{width:8px;height:8px;border-radius:50%;background:#f7c948}
-.status-dot.ok{background:#54d45a}
-
-/* Layout */
+.status-dot{width:8px;height:8px;border-radius:50%;background:#f7c948}.status-dot.ok{background:#54d45a}
 .wrap{max-width:1400px;margin:0 auto;padding:24px}
-
-/* Card */
 .card{background:#fff;border-radius:10px;box-shadow:0 2px 8px rgba(0,0,0,.08);padding:24px;margin-bottom:20px}
 .card-title{font-size:.95rem;font-weight:700;color:#1f1f1f;margin-bottom:16px;padding-bottom:10px;border-bottom:2px solid #0078d4;display:flex;align-items:center;gap:8px}
-
-/* Form */
-.form-row{display:grid;grid-template-columns:1fr 1fr;gap:20px;align-items:start}
+.form-row{display:grid;grid-template-columns:1fr 1fr;gap:24px;align-items:start}
 .form-group{margin-bottom:14px}
 .lbl{display:block;font-size:.8rem;font-weight:600;color:#605e5c;margin-bottom:5px}
 .inp{width:100%;padding:8px 11px;border:1px solid #c8c6c4;border-radius:5px;font-size:.875rem;transition:border .15s}
 .inp:focus{border-color:#0078d4;outline:none;box-shadow:0 0 0 2px rgba(0,120,212,.18)}
 .hint{font-size:.75rem;color:#8a8886;margin-top:4px}
-
-/* Buttons */
 .btn{padding:8px 20px;border:none;border-radius:5px;font-size:.875rem;font-weight:600;cursor:pointer;transition:all .15s;display:inline-flex;align-items:center;gap:6px}
-.btn-primary{background:#0078d4;color:#fff}
-.btn-primary:hover{background:#106ebe}
-.btn-primary:disabled{background:#a0a0a0;cursor:not-allowed}
-.btn-sm{padding:5px 14px;font-size:.8rem}
-
-/* Badges */
+.btn-primary{background:#0078d4;color:#fff}.btn-primary:hover{background:#106ebe}.btn-primary:disabled{background:#a0a0a0;cursor:not-allowed}
 .badge{display:inline-block;padding:2px 9px;border-radius:11px;font-size:.72rem;font-weight:700;white-space:nowrap}
-.b-err{background:#fde7e9;color:#a4262c}
-.b-warn{background:#fff4ce;color:#7a4100}
-.b-info{background:#dce9f8;color:#004578}
-.b-ok{background:#dff6dd;color:#107c10}
-
-/* Stats */
+.b-err{background:#fde7e9;color:#a4262c}.b-warn{background:#fff4ce;color:#7a4100}.b-info{background:#dce9f8;color:#004578}.b-ok{background:#dff6dd;color:#107c10}
 .stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:14px;margin-bottom:22px}
 .stat{background:#fff;border-radius:8px;padding:16px 14px;text-align:center;box-shadow:0 2px 6px rgba(0,0,0,.07);border-top:3px solid #0078d4}
-.stat.s-err{border-top-color:#a4262c}
-.stat.s-warn{border-top-color:#f7c300}
-.stat.s-ok{border-top-color:#107c10}
-.stat-n{font-size:1.9rem;font-weight:800;line-height:1}
-.stat-l{font-size:.75rem;color:#605e5c;margin-top:5px}
-.n-err{color:#a4262c}
-.n-warn{color:#7a4100}
-.n-ok{color:#107c10}
-.n-blue{color:#0078d4}
-
-/* Tabs */
+.stat.s-err{border-top-color:#a4262c}.stat.s-warn{border-top-color:#f7c300}.stat.s-ok{border-top-color:#107c10}
+.stat-n{font-size:1.9rem;font-weight:800;line-height:1}.stat-l{font-size:.75rem;color:#605e5c;margin-top:5px}
+.n-err{color:#a4262c}.n-warn{color:#7a4100}.n-ok{color:#107c10}.n-blue{color:#0078d4}
 .tabs{display:flex;gap:2px;border-bottom:2px solid #edebe9;margin-bottom:22px}
 .tab{padding:10px 20px;cursor:pointer;font-size:.875rem;font-weight:600;color:#605e5c;border-bottom:3px solid transparent;margin-bottom:-2px;transition:all .15s;border-radius:5px 5px 0 0}
-.tab:hover{color:#0078d4;background:#f3f9ff}
-.tab.active{color:#0078d4;border-bottom-color:#0078d4;background:#f0f7ff}
+.tab:hover{color:#0078d4;background:#f3f9ff}.tab.active{color:#0078d4;border-bottom-color:#0078d4;background:#f0f7ff}
 .tab-badge{background:#0078d4;color:#fff;border-radius:10px;padding:1px 7px;font-size:.7rem;margin-left:6px}
-.tab-badge.red{background:#a4262c}
-.tab-badge.amber{background:#f7c300;color:#1f1f1f}
-.tc{display:none}
-.tc.active{display:block}
-
-/* Table */
+.tab-badge.red{background:#a4262c}.tab-badge.amber{background:#f7c300;color:#1f1f1f}
+.tc{display:none}.tc.active{display:block}
 .tbl-wrap{overflow-x:auto}
 table{width:100%;border-collapse:collapse}
 th{text-align:left;padding:10px 12px;background:#faf9f8;font-weight:700;font-size:.8rem;color:#323130;border-bottom:2px solid #edebe9;white-space:nowrap}
 td{padding:9px 12px;border-bottom:1px solid #f3f2f1;vertical-align:middle}
-tr.clickable{cursor:pointer}
-tr.clickable:hover td{background:#faf9f8}
-
-/* Expand rows */
-.exp-row{display:none}
-.exp-row.open{display:table-row}
+tr.clickable{cursor:pointer}tr.clickable:hover td{background:#faf9f8}
+.exp-row{display:none}.exp-row.open{display:table-row}
 .exp-row td{background:#faf9f8;padding:12px 20px}
 .detail-box{background:#fff;border:1px solid #edebe9;border-radius:7px;padding:16px}
 .detail-desc{font-size:.82rem;color:#605e5c;margin-bottom:12px;padding-bottom:10px;border-bottom:1px solid #edebe9}
-
-/* Issue items */
-.issue-item{display:flex;gap:10px;padding:8px 0;border-bottom:1px solid #f3f2f1}
-.issue-item:last-child{border-bottom:none}
+.issue-item{display:flex;gap:10px;padding:8px 0;border-bottom:1px solid #f3f2f1}.issue-item:last-child{border-bottom:none}
 .issue-icon{font-size:1rem;flex-shrink:0;line-height:1.4}
-.issue-msg{font-weight:600;font-size:.84rem}
-.issue-fix{font-size:.78rem;color:#605e5c;margin-top:2px}
-.fix-kw{color:#0078d4;font-weight:600}
-
-/* Arrow */
-.arr{display:inline-block;transition:transform .18s;color:#0078d4;font-size:.8rem}
-.arr.open{transform:rotate(90deg)}
-
-/* Subscription list */
-.sub-list{max-height:180px;overflow-y:auto;border:1px solid #edebe9;border-radius:5px;padding:6px}
-.sub-item{display:flex;align-items:center;gap:8px;padding:5px 8px;border-radius:4px;cursor:pointer}
-.sub-item:hover{background:#f3f2f1}
-.sub-item label{cursor:pointer;flex:1;font-size:.875rem}
-.sub-state-tag{font-size:.72rem;color:#8a8886;background:#f3f2f1;padding:1px 6px;border-radius:3px}
-
-/* Progress */
+.issue-msg{font-weight:600;font-size:.84rem}.issue-fix{font-size:.78rem;color:#605e5c;margin-top:2px}.fix-kw{color:#0078d4;font-weight:600}
+.arr{display:inline-block;transition:transform .18s;color:#0078d4;font-size:.8rem}.arr.open{transform:rotate(90deg)}
 .progress-bar{height:5px;background:#edebe9;border-radius:3px;overflow:hidden;margin-top:8px}
 .progress-fill{height:100%;background:linear-gradient(90deg,#0078d4,#2899f5);border-radius:3px;transition:width .4s}
-
-/* Alert */
 .alert{padding:10px 14px;border-radius:6px;margin-bottom:14px;font-size:.84rem}
-.a-err{background:#fde7e9;color:#a4262c;border:1px solid #f1707b}
-.a-info{background:#dce9f8;color:#004578;border:1px solid #2899f5}
-
-/* Loading spinner */
+.a-err{background:#fde7e9;color:#a4262c;border:1px solid #f1707b}.a-info{background:#dce9f8;color:#004578;border:1px solid #2899f5}
 .spin{display:inline-block;width:16px;height:16px;border:2px solid rgba(255,255,255,.3);border-top-color:#fff;border-radius:50%;animation:spin .7s linear infinite}
 .spin-dark{border-color:rgba(0,120,212,.2);border-top-color:#0078d4}
 @keyframes spin{to{transform:rotate(360deg)}}
-
-/* Empty state */
-.empty{text-align:center;padding:40px 20px;color:#605e5c}
-.empty-icon{font-size:2.8rem;margin-bottom:10px}
-.empty p{font-size:.875rem;line-height:1.6}
-
-/* Rec cards */
+.empty{text-align:center;padding:40px 20px;color:#605e5c}.empty-icon{font-size:2.8rem;margin-bottom:10px}.empty p{font-size:.875rem;line-height:1.6}
 .rec-card{border:1px solid #edebe9;border-radius:8px;margin-bottom:14px;overflow:hidden}
 .rec-hdr{display:flex;align-items:center;justify-content:space-between;padding:12px 16px;background:#faf9f8;border-bottom:1px solid #edebe9}
-.rec-custom-name{font-weight:700;font-size:.9rem}
-.rec-body{padding:14px 16px}
-.match-item{display:flex;align-items:flex-start;gap:12px;padding:10px;border:1px solid #edebe9;border-radius:6px;margin-bottom:8px;transition:border .15s,background .15s;cursor:default}
+.rec-custom-name{font-weight:700;font-size:.9rem}.rec-body{padding:14px 16px}
+.match-item{display:flex;align-items:flex-start;gap:12px;padding:10px;border:1px solid #edebe9;border-radius:6px;margin-bottom:8px;transition:border .15s,background .15s}
 .match-item:hover{border-color:#0078d4;background:#f3f9ff}
 .match-score{background:#0078d4;color:#fff;padding:4px 9px;border-radius:11px;font-size:.72rem;font-weight:700;white-space:nowrap;align-self:flex-start;margin-top:2px}
-.match-score.hi{background:#107c10}
-.match-name{font-weight:700;font-size:.875rem}
-.match-desc{font-size:.78rem;color:#605e5c;margin-top:2px}
-.match-why{font-size:.74rem;color:#0078d4;margin-top:3px}
+.match-score.hi{background:#107c10}.match-name{font-weight:700;font-size:.875rem}
+.match-desc{font-size:.78rem;color:#605e5c;margin-top:2px}.match-why{font-size:.74rem;color:#0078d4;margin-top:3px}
 .match-meta{margin-top:5px;display:flex;gap:6px;align-items:center;flex-wrap:wrap}
 .tag{display:inline-block;background:#f3f2f1;padding:1px 8px;border-radius:3px;font-size:.72rem;color:#323130}
-.portal-link{font-size:.75rem;color:#0078d4;text-decoration:none}
-.portal-link:hover{text-decoration:underline}
-
-/* Filter bar */
+.portal-link{font-size:.75rem;color:#0078d4;text-decoration:none}.portal-link:hover{text-decoration:underline}
 .filter-bar{display:flex;gap:10px;margin-bottom:14px;flex-wrap:wrap;align-items:center}
 .filter-btn{padding:5px 13px;border-radius:15px;border:1px solid #c8c6c4;background:#fff;font-size:.8rem;cursor:pointer;transition:all .15s}
 .filter-btn.active{background:#0078d4;color:#fff;border-color:#0078d4}
 .search-inp{padding:6px 11px;border:1px solid #c8c6c4;border-radius:15px;font-size:.8rem;width:220px}
 .search-inp:focus{outline:none;border-color:#0078d4}
-
-/* Utility */
 .muted{color:#8a8886}
+/* --- Management Group Tree --- */
+.mg-wrap{border:1px solid #edebe9;border-radius:6px;max-height:280px;overflow-y:auto;background:#faf9f8}
+.mg-node{margin:1px 0}
+.mg-hdr{display:flex;align-items:center;gap:6px;padding:5px 8px;cursor:pointer;border-radius:4px;user-select:none}
+.mg-hdr:hover{background:#e8f0fb}
+.mg-arrow{width:14px;text-align:center;font-size:.68rem;color:#0078d4;flex-shrink:0;transition:transform .15s}
+.mg-name{font-size:.84rem;font-weight:600}
+.mg-children{padding-left:18px}
+.mg-children.hidden{display:none}
+.tree-sub{display:flex;align-items:center;gap:7px;padding:4px 8px;border-radius:4px}
+.tree-sub:hover{background:#e8f0fb}
+.tree-sub label{cursor:pointer;font-size:.84rem;flex:1}
+.tree-loading{padding:16px;color:#605e5c;font-size:.84rem;text-align:center}
+/* --- Per-subscription scan status --- */
+.scan-sub-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:6px;margin-top:10px}
+.scan-sub-item{display:flex;align-items:center;gap:8px;padding:7px 10px;border-radius:5px;font-size:.82rem;border:1px solid}
+.scan-sub-item.scanning{background:#dce9f8;border-color:#90c3f5}
+.scan-sub-item.done{background:#dff6dd;border-color:#92d9a0}
+.scan-sub-item.error{background:#fde7e9;border-color:#f4a6ab}
+.sub-stat-name{font-weight:600;flex:1}
+.sub-stat-detail{font-size:.73rem;color:#605e5c;margin-left:4px}
 .hidden{display:none!important}
 </style>
 </head>
@@ -156,14 +102,8 @@ tr.clickable:hover td{background:#faf9f8}
 
 <div class="hdr">
   <div class="hdr-logo">🛡</div>
-  <div>
-    <h1>Azure Policy Analyzer</h1>
-    <div class="hdr-sub">Custom policy health check and built-in recommendations</div>
-  </div>
-  <div class="hdr-status" id="hdr-status">
-    <span class="status-dot" id="status-dot"></span>
-    <span id="status-text">Not connected</span>
-  </div>
+  <div><h1>Azure Policy Analyzer</h1><div class="hdr-sub">Custom policy health check and built-in recommendations</div></div>
+  <div class="hdr-status" id="hdr-status"><span class="status-dot" id="status-dot"></span><span id="status-text">Not connected</span></div>
 </div>
 
 <div class="wrap">
@@ -179,23 +119,32 @@ tr.clickable:hover td{background:#faf9f8}
           <div class="hint">Leave blank to use your default Azure directory</div>
         </div>
         <div id="conn-alert"></div>
-        <button class="btn btn-primary" id="conn-btn" onclick="connectAzure()">
-          Connect to Azure
-        </button>
+        <button class="btn btn-primary" id="conn-btn" onclick="connectAzure()">Connect to Azure</button>
         <div class="hint" style="margin-top:8px">A browser window will open for Microsoft sign-in</div>
       </div>
+
+      <!-- Subscription / MG tree panel -->
       <div id="sub-panel" class="hidden">
         <div class="form-group">
-          <label class="lbl">Subscriptions to analyze</label>
-          <div class="sub-list" id="sub-list"></div>
-          <div class="hint" style="margin-top:5px" id="sub-hint"></div>
+          <label class="lbl">Scope - select subscriptions to analyze</label>
+          <div class="mg-wrap" id="mg-tree-el">
+            <div class="tree-loading"><span class="spin spin-dark" style="width:14px;height:14px;border-width:2px"></span> Loading management group structure...</div>
+          </div>
+          <div class="hint" style="margin-top:5px;display:flex;justify-content:space-between">
+            <span id="sel-count">0 selected</span>
+            <span><a href="#" onclick="selectAll(true);return false" style="color:#0078d4;font-size:.75rem">Select all</a> &nbsp; <a href="#" onclick="selectAll(false);return false" style="color:#0078d4;font-size:.75rem">Clear</a></span>
+          </div>
         </div>
-        <button class="btn btn-primary" id="scan-btn" onclick="startScan()">
-          🔍 Analyze Policies
-        </button>
-        <div id="scan-progress" class="hidden" style="margin-top:12px">
-          <span class="muted" id="scan-msg">Scanning... this may take a minute</span>
-          <div class="progress-bar"><div class="progress-fill" id="prog-fill" style="width:15%"></div></div>
+        <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+          <button class="btn btn-primary" id="scan-btn" onclick="startScan()">🔍 Analyze Policies</button>
+        </div>
+        <!-- Per-subscription scan progress -->
+        <div id="scan-progress" class="hidden" style="margin-top:16px">
+          <div style="display:flex;align-items:center;gap:8px">
+            <span class="spin spin-dark" style="width:14px;height:14px;border-width:2px"></span>
+            <span class="muted" id="scan-global-msg">Starting scan...</span>
+          </div>
+          <div class="scan-sub-grid" id="scan-sub-grid"></div>
         </div>
         <div id="scan-alert" class="hidden" style="margin-top:10px"></div>
       </div>
@@ -204,52 +153,32 @@ tr.clickable:hover td{background:#faf9f8}
 
   <!-- Results -->
   <div id="results" class="hidden">
-    <!-- Stats -->
     <div class="stats" id="stats"></div>
-
-    <!-- Tabs -->
     <div class="tabs">
-      <div class="tab active" id="tab-btn-compliance" onclick="showTab('compliance')">
-        Compliance Issues <span class="tab-badge red" id="tbadge-compliance">0</span>
-      </div>
-      <div class="tab" id="tab-btn-custom" onclick="showTab('custom')">
-        Custom Policy Health <span class="tab-badge amber" id="tbadge-custom">0</span>
-      </div>
-      <div class="tab" id="tab-btn-recs" onclick="showTab('recs')">
-        Recommendations <span class="tab-badge" id="tbadge-recs">0</span>
-      </div>
+      <div class="tab active" id="tab-btn-compliance" onclick="showTab('compliance')">Compliance Issues <span class="tab-badge red" id="tbadge-compliance">0</span></div>
+      <div class="tab" id="tab-btn-custom" onclick="showTab('custom')">Custom Policy Health <span class="tab-badge amber" id="tbadge-custom">0</span></div>
+      <div class="tab" id="tab-btn-recs" onclick="showTab('recs')">Recommendations <span class="tab-badge" id="tbadge-recs">0</span></div>
     </div>
-
-    <!-- Compliance tab -->
     <div class="tc active" id="tc-compliance">
-      <div class="card">
-        <div class="card-title">Non-Compliant Policy Assignments</div>
-        <div id="compliance-body"></div>
-      </div>
+      <div class="card"><div class="card-title">Non-Compliant Policy Assignments</div><div id="compliance-body"></div></div>
     </div>
-
-    <!-- Custom policies tab -->
     <div class="tc" id="tc-custom">
       <div class="card">
         <div class="card-title">Custom Policy Definitions - Health Check</div>
         <div class="filter-bar">
-          <button class="filter-btn active" onclick="filterCustom('all', this)">All</button>
-          <button class="filter-btn" onclick="filterCustom('error', this)">🔴 Errors</button>
-          <button class="filter-btn" onclick="filterCustom('warning', this)">🟡 Warnings</button>
-          <button class="filter-btn" onclick="filterCustom('ok', this)">✅ Healthy</button>
+          <button class="filter-btn active" onclick="filterCustom('all',this)">All</button>
+          <button class="filter-btn" onclick="filterCustom('error',this)">🔴 Errors</button>
+          <button class="filter-btn" onclick="filterCustom('warning',this)">🟡 Warnings</button>
+          <button class="filter-btn" onclick="filterCustom('ok',this)">✅ Healthy</button>
           <input class="search-inp" id="custom-search" type="text" placeholder="Search policies..." oninput="searchCustom(this.value)">
         </div>
         <div id="custom-body"></div>
       </div>
     </div>
-
-    <!-- Recommendations tab -->
     <div class="tc" id="tc-recs">
       <div class="card">
         <div class="card-title">Built-in Policy Recommendations</div>
-        <p class="muted" style="margin-bottom:16px;font-size:.84rem">
-          These built-in policies could replace your custom ones - they update automatically with Azure, reducing maintenance and preventing definition drift.
-        </p>
+        <p class="muted" style="margin-bottom:16px;font-size:.84rem">These built-in policies could replace your custom ones - they update automatically with Azure, eliminating definition drift and maintenance overhead.</p>
         <div id="recs-body"></div>
       </div>
     </div>
@@ -258,118 +187,280 @@ tr.clickable:hover td{background:#faf9f8}
 </div>
 
 <script>
-let allCustomRows = [];
+// =====================================================================
+// State
+// =====================================================================
+let allSubscriptions = [];   // from connect call
+let mgCounter = 0;           // for unique MG node IDs
+let subNameMap = {};         // sub_id -> display name
+let accResults = [];         // accumulated scan results
+let activeSSE = null;
 
-// ---- Connect ----
+// =====================================================================
+// Connect
+// =====================================================================
 async function connectAzure() {
   const tenantId = document.getElementById('tenant-id').value.trim();
   const btn = document.getElementById('conn-btn');
-  const alert = document.getElementById('conn-alert');
+  const alertEl = document.getElementById('conn-alert');
 
   btn.disabled = true;
   btn.innerHTML = '<span class="spin"></span> Opening browser...';
-  alert.innerHTML = '<div class="alert a-info">A browser window is opening. Sign in with your Azure account to continue...</div>';
+  alertEl.innerHTML = '<div class="alert a-info">A browser window is opening. Sign in with your Azure account...</div>';
 
   try {
     const res = await fetch('/api/connect', {
-      method: 'POST',
-      headers: {'Content-Type': 'application/json'},
+      method: 'POST', headers: {'Content-Type':'application/json'},
       body: JSON.stringify({tenant_id: tenantId})
     });
     const data = await res.json();
     if (data.status !== 'ok') throw new Error(data.message || 'Connection failed');
 
-    alert.innerHTML = '';
-    renderSubs(data.subscriptions);
+    allSubscriptions = data.subscriptions;
+    alertEl.innerHTML = '';
     setStatus('ok', `Connected - ${data.subscriptions.length} subscription(s)`);
     btn.innerHTML = 'Reconnect';
+
+    // Show panel, then load MG tree
+    document.getElementById('sub-panel').classList.remove('hidden');
+    loadMGTree(tenantId, data.subscriptions);
   } catch (e) {
-    alert.innerHTML = `<div class="alert a-err">Error: ${esc(e.message)}</div>`;
+    alertEl.innerHTML = `<div class="alert a-err">Error: ${esc(e.message)}</div>`;
     btn.innerHTML = 'Connect to Azure';
   } finally {
     btn.disabled = false;
   }
 }
 
-function renderSubs(subs) {
-  const list = document.getElementById('sub-list');
-  list.innerHTML = '';
-  subs.forEach(s => {
-    const d = document.createElement('div');
-    d.className = 'sub-item';
-    d.innerHTML = `<input type="checkbox" id="s-${s.id}" value="${s.id}" ${s.state === 'Enabled' ? 'checked' : ''}><label for="s-${s.id}">${esc(s.name)}</label><span class="sub-state-tag">${esc(s.state)}</span>`;
-    list.appendChild(d);
-  });
-  document.getElementById('sub-hint').textContent = `${subs.length} subscription(s) found`;
-  document.getElementById('sub-panel').classList.remove('hidden');
+// =====================================================================
+// Management Group Tree
+// =====================================================================
+async function loadMGTree(tenantId, subscriptions) {
+  const el = document.getElementById('mg-tree-el');
+  el.innerHTML = '<div class="tree-loading"><span class="spin spin-dark" style="width:14px;height:14px;border-width:2px"></span> Loading management groups...</div>';
+
+  try {
+    const qs = tenantId ? `?tenant_id=${encodeURIComponent(tenantId)}` : '';
+    const res = await fetch('/api/mg-tree' + qs);
+    const data = await res.json();
+
+    if (data.status === 'ok' && data.tree) {
+      mgCounter = 0;
+      const html = renderMGNode(data.tree, 0);
+      el.innerHTML = html;
+      // Auto-check all, update count, update indeterminate states
+      onSubCheck();
+      // Auto-expand root
+      const firstMGChildren = el.querySelector('.mg-children');
+      if (firstMGChildren) firstMGChildren.classList.remove('hidden');
+      const firstArrow = el.querySelector('.mg-arrow');
+      if (firstArrow) firstArrow.style.transform = 'rotate(90deg)';
+    } else {
+      renderFlatSubList(subscriptions);
+    }
+  } catch (e) {
+    renderFlatSubList(subscriptions);
+  }
 }
 
-// ---- Scan ----
+function renderMGNode(node, level) {
+  const pad = level * 16;
+  if (node.type === 'subscription') {
+    const sid = esc(node.id);
+    const sname = esc(node.name);
+    return `<div class="tree-sub" style="padding-left:${pad}px">
+      <input type="checkbox" class="sub-chk" id="sub-${sid}" value="${sid}" data-name="${sname}" checked onchange="onSubCheck()">
+      <label for="sub-${sid}">🔵 ${sname}</label>
+    </div>`;
+  }
+  // Management group
+  const nid = 'mg' + (++mgCounter);
+  const subCount = countSubs(node);
+  const children = (node.children || []).map(c => renderMGNode(c, level + 1)).join('');
+
+  return `<div class="mg-node" style="padding-left:${pad}px">
+    <div class="mg-hdr" onclick="toggleMG('${nid}')">
+      <span class="mg-arrow" id="arr-${nid}">▶</span>
+      <input type="checkbox" id="chk-${nid}" class="mg-chk" onclick="event.stopPropagation()" onchange="onMGCheck('${nid}', this.checked)">
+      <span>📁</span>
+      <span class="mg-name">${esc(node.name)}</span>
+      <span class="muted" style="font-size:.72rem;margin-left:4px">(${subCount} sub${subCount!==1?'s':''})</span>
+    </div>
+    <div class="mg-children hidden" id="ch-${nid}">${children}</div>
+  </div>`;
+}
+
+function countSubs(node) {
+  if (node.type === 'subscription') return 1;
+  return (node.children || []).reduce((s, c) => s + countSubs(c), 0);
+}
+
+function toggleMG(nid) {
+  const el = document.getElementById('ch-' + nid);
+  const arr = document.getElementById('arr-' + nid);
+  const open = !el.classList.contains('hidden');
+  el.classList.toggle('hidden', open);
+  arr.style.transform = open ? '' : 'rotate(90deg)';
+}
+
+function onMGCheck(nid, checked) {
+  const container = document.getElementById('ch-' + nid);
+  if (container) container.querySelectorAll('.sub-chk').forEach(c => { c.checked = checked; });
+  onSubCheck();
+}
+
+function onSubCheck() {
+  // Update indeterminate state on all MG checkboxes
+  document.querySelectorAll('.mg-chk').forEach(mgChk => {
+    const nid = mgChk.id.replace('chk-', '');
+    const ch = document.getElementById('ch-' + nid);
+    if (!ch) return;
+    const subs = [...ch.querySelectorAll('.sub-chk')];
+    const n = subs.filter(s => s.checked).length;
+    mgChk.checked = n === subs.length;
+    mgChk.indeterminate = n > 0 && n < subs.length;
+  });
+  updateSelCount();
+}
+
+function updateSelCount() {
+  const n = document.querySelectorAll('.sub-chk:checked').length;
+  document.getElementById('sel-count').textContent = n + ' subscription' + (n!==1?'s':'') + ' selected';
+}
+
+function selectAll(checked) {
+  document.querySelectorAll('.sub-chk').forEach(c => { c.checked = checked; });
+  onSubCheck();
+}
+
+function getSelectedSubs() {
+  return [...document.querySelectorAll('.sub-chk:checked')].map(c => ({id: c.value, name: c.dataset.name || c.value}));
+}
+
+function renderFlatSubList(subs) {
+  const el = document.getElementById('mg-tree-el');
+  if (!subs || !subs.length) { el.innerHTML = '<div class="tree-loading">No subscriptions found</div>'; return; }
+  el.innerHTML = subs.map(s =>
+    `<div class="tree-sub" style="padding-left:8px">
+      <input type="checkbox" class="sub-chk" id="sub-${esc(s.id)}" value="${esc(s.id)}" data-name="${esc(s.name)}" ${s.state==='Enabled'?'checked':''} onchange="onSubCheck()">
+      <label for="sub-${esc(s.id)}">🔵 ${esc(s.name)} <span class="muted">(${esc(s.state)})</span></label>
+    </div>`
+  ).join('');
+  onSubCheck();
+}
+
+// =====================================================================
+// Scan (SSE streaming)
+// =====================================================================
 async function startScan() {
   const tenantId = document.getElementById('tenant-id').value.trim();
-  const checked = [...document.querySelectorAll('#sub-list input:checked')];
-  if (!checked.length) { alert('Please select at least one subscription.'); return; }
+  const selected = getSelectedSubs();
+  if (!selected.length) { alert('Please select at least one subscription.'); return; }
 
-  const subIds = checked.map(c => c.value);
-  const subNames = {};
-  checked.forEach(c => { subNames[c.value] = c.nextElementSibling.textContent; });
+  if (activeSSE) { activeSSE.close(); activeSSE = null; }
+
+  const subIds = selected.map(s => s.id);
+  selected.forEach(s => { subNameMap[s.id] = s.name; });
 
   const btn = document.getElementById('scan-btn');
   btn.disabled = true;
   btn.innerHTML = '<span class="spin"></span> Scanning...';
+
+  accResults = [];
+  initSubGrid(subIds);
   document.getElementById('scan-progress').classList.remove('hidden');
   document.getElementById('scan-alert').classList.add('hidden');
   document.getElementById('results').classList.add('hidden');
 
-  let prog = 15;
-  document.getElementById('prog-fill').style.width = prog + '%';
-  const progInt = setInterval(() => {
-    prog = Math.min(88, prog + 4);
-    document.getElementById('prog-fill').style.width = prog + '%';
-    if (prog < 40) setScanMsg('Fetching built-in policies...');
-    else if (prog < 60) setScanMsg('Scanning compliance data...');
-    else if (prog < 75) setScanMsg('Analyzing custom policies...');
-    else setScanMsg('Generating recommendations...');
-  }, 2500);
-
+  // POST /api/scan/init to get a scan_id
+  let scanId;
   try {
-    const res = await fetch('/api/scan', {
-      method: 'POST',
-      headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({tenant_id: tenantId, subscription_ids: subIds, subscription_names: subNames})
+    const r = await fetch('/api/scan/init', {
+      method: 'POST', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({tenant_id: tenantId, subscription_ids: subIds, subscription_names: subNameMap})
     });
-    const data = await res.json();
-    clearInterval(progInt);
-    document.getElementById('prog-fill').style.width = '100%';
-
-    if (data.status !== 'ok') throw new Error(data.message || 'Scan failed');
-
-    setTimeout(() => renderResults(data.results), 300);
+    scanId = (await r.json()).scan_id;
   } catch (e) {
-    clearInterval(progInt);
-    const sal = document.getElementById('scan-alert');
-    sal.innerHTML = `<div class="alert a-err">Scan error: ${esc(e.message)}</div>`;
-    sal.classList.remove('hidden');
-  } finally {
-    btn.disabled = false;
-    btn.innerHTML = '🔍 Analyze Policies';
+    showScanAlert('Failed to start scan: ' + e.message);
+    btn.disabled = false; btn.innerHTML = '🔍 Analyze Policies';
+    return;
+  }
+
+  // Open SSE stream
+  activeSSE = new EventSource(`/api/scan/stream/${scanId}`);
+  activeSSE.onmessage = (e) => {
+    try { handleScanEvent(JSON.parse(e.data)); } catch {}
+  };
+  activeSSE.onerror = () => {
+    if (activeSSE) { activeSSE.close(); activeSSE = null; }
+    btn.disabled = false; btn.innerHTML = '🔍 Analyze Policies';
+    document.getElementById('scan-progress').classList.add('hidden');
+  };
+}
+
+function handleScanEvent(msg) {
+  const btn = document.getElementById('scan-btn');
+  const msgEl = document.getElementById('scan-global-msg');
+
+  if (msg.type === 'start') {
+    msgEl.textContent = `Scanning 0 / ${msg.total} subscriptions...`;
+  } else if (msg.type === 'progress') {
+    msgEl.textContent = msg.msg || '';
+  } else if (msg.type === 'builtins') {
+    msgEl.textContent = `${msg.count} built-in policies loaded. Scanning subscriptions in parallel...`;
+  } else if (msg.type === 'result') {
+    const r = msg.data;
+    accResults.push(r);
+    const stats = r.custom_policies?.stats || {};
+    updateSubGrid(r.subscription_id, 'done',
+      `${stats.total||0} custom policies (${stats.errors||0} errors, ${stats.warnings||0} warnings)`);
+    msgEl.textContent = `Completed ${msg.completed} / ${msg.total} subscriptions...`;
+    renderResults(accResults);
+  } else if (msg.type === 'error') {
+    const r = msg.data || {};
+    updateSubGrid(r.subscription_id || '', 'error', r.error || 'Scan failed');
+    msgEl.textContent = `Completed ${msg.completed} / ${msg.total} subscriptions...`;
+  } else if (msg.type === 'done') {
+    if (activeSSE) { activeSSE.close(); activeSSE = null; }
+    btn.disabled = false; btn.innerHTML = '🔍 Analyze Policies';
     document.getElementById('scan-progress').classList.add('hidden');
   }
 }
 
-function setScanMsg(msg) { document.getElementById('scan-msg').textContent = msg; }
+function initSubGrid(subIds) {
+  document.getElementById('scan-sub-grid').innerHTML = subIds.map(id =>
+    `<div class="scan-sub-item scanning" id="ssi-${id}">
+      <span class="spin spin-dark" style="width:14px;height:14px;border-width:2px;flex-shrink:0"></span>
+      <span class="sub-stat-name">${esc(subNameMap[id] || id)}</span>
+    </div>`
+  ).join('');
+}
 
-// ---- Render ----
+function updateSubGrid(subId, state, detail) {
+  const el = document.getElementById('ssi-' + subId);
+  if (!el) return;
+  const icon = state === 'done' ? '✅' : '❌';
+  el.className = 'scan-sub-item ' + state;
+  el.innerHTML = `<span style="flex-shrink:0">${icon}</span><span class="sub-stat-name">${esc(subNameMap[subId]||subId)}</span><span class="sub-stat-detail">${esc(detail)}</span>`;
+}
+
+function showScanAlert(msg) {
+  const el = document.getElementById('scan-alert');
+  el.innerHTML = `<div class="alert a-err">${esc(msg)}</div>`;
+  el.classList.remove('hidden');
+}
+
+// =====================================================================
+// Results rendering (same functions, called incrementally)
+// =====================================================================
 function renderResults(results) {
-  let totalComp = 0, totalCustom = 0, totalErr = 0, totalWarn = 0, totalOk = 0, totalRecs = 0;
+  let totalComp=0, totalCustom=0, totalErr=0, totalWarn=0, totalOk=0, totalRecs=0;
   results.forEach(r => {
-    totalComp += (r.compliance || []).length;
+    totalComp += (r.compliance||[]).length;
     const s = r.custom_policies?.stats || {};
-    totalCustom += s.total || 0;
-    totalErr += s.errors || 0;
-    totalWarn += (s.warnings || 0) + (s.info || 0);
-    totalOk += s.ok || 0;
-    totalRecs += (r.recommendations || []).length;
+    totalCustom += s.total||0; totalErr += s.errors||0;
+    totalWarn += (s.warnings||0)+(s.info||0); totalOk += s.ok||0;
+    totalRecs += (r.recommendations||[]).length;
   });
 
   document.getElementById('stats').innerHTML = `
@@ -378,8 +469,7 @@ function renderResults(results) {
     <div class="stat s-err"><div class="stat-n n-err">${totalErr}</div><div class="stat-l">With Errors</div></div>
     <div class="stat s-warn"><div class="stat-n n-warn">${totalWarn}</div><div class="stat-l">With Warnings</div></div>
     <div class="stat s-ok"><div class="stat-n n-ok">${totalOk}</div><div class="stat-l">Healthy</div></div>
-    <div class="stat"><div class="stat-n n-blue">${totalRecs}</div><div class="stat-l">Built-in Alternatives</div></div>
-  `;
+    <div class="stat"><div class="stat-n n-blue">${totalRecs}</div><div class="stat-l">Built-in Alternatives</div></div>`;
 
   document.getElementById('tbadge-compliance').textContent = totalComp;
   document.getElementById('tbadge-custom').textContent = totalErr + totalWarn;
@@ -390,71 +480,56 @@ function renderResults(results) {
   renderRecs(results);
 
   document.getElementById('results').classList.remove('hidden');
-  document.getElementById('results').scrollIntoView({behavior:'smooth'});
+  if (results.length === 1) document.getElementById('results').scrollIntoView({behavior:'smooth'});
 }
 
 function renderCompliance(results) {
   const el = document.getElementById('compliance-body');
   let all = [];
   results.forEach(r => (r.compliance||[]).forEach(c => all.push({...c, sub_name: r.subscription_name})));
-  if (!all.length) {
-    el.innerHTML = '<div class="empty"><div class="empty-icon">✅</div><p>No non-compliant policy assignments found.</p></div>';
-    return;
-  }
+  if (!all.length) { el.innerHTML = '<div class="empty"><div class="empty-icon">✅</div><p>No non-compliant policy assignments found.</p></div>'; return; }
   all.sort((a,b) => b.non_compliant_resources - a.non_compliant_resources);
-  let html = `<div class="tbl-wrap"><table>
-    <thead><tr><th>Policy Assignment</th><th>Subscription</th><th>Non-Compliant Resources</th><th>Policies Affected</th></tr></thead><tbody>`;
+  let html = `<div class="tbl-wrap"><table><thead><tr><th>Policy Assignment</th><th>Subscription</th><th>Non-Compliant Resources</th><th>Policies Affected</th></tr></thead><tbody>`;
   all.forEach(c => {
-    html += `<tr><td><strong>${esc(c.policy_assignment_name)}</strong><br><span class="muted" style="font-size:.75rem">${esc(c.policy_assignment_id||'')}</span></td>
-    <td>${esc(c.sub_name||'')}</td>
-    <td><span class="badge b-err">${c.non_compliant_resources}</span></td>
-    <td>${c.non_compliant_policies||0}</td></tr>`;
+    html += `<tr><td><strong>${esc(c.policy_assignment_name)}</strong><br><span class="muted" style="font-size:.72rem">${esc(c.policy_assignment_id||'')}</span></td>
+      <td>${esc(c.sub_name||'')}</td><td><span class="badge b-err">${c.non_compliant_resources}</span></td><td>${c.non_compliant_policies||0}</td></tr>`;
   });
-  html += '</tbody></table></div>';
-  el.innerHTML = html;
+  el.innerHTML = html + '</tbody></table></div>';
 }
 
 function renderCustom(results) {
-  allCustomRows = [];
-  results.forEach(r => (r.custom_policies?.all||[]).forEach(p => allCustomRows.push({...p, sub_name: r.subscription_name})));
-  renderCustomTable(allCustomRows);
+  let allP = [];
+  results.forEach(r => (r.custom_policies?.all||[]).forEach(p => allP.push({...p, sub_name: r.subscription_name})));
+  renderCustomTable(allP);
 }
 
 function renderCustomTable(policies) {
   const el = document.getElementById('custom-body');
-  if (!policies.length) {
-    el.innerHTML = '<div class="empty"><div class="empty-icon">📋</div><p>No custom policies found in selected subscriptions.</p></div>';
-    return;
-  }
-  let html = `<div class="tbl-wrap"><table id="custom-tbl">
-    <thead><tr><th></th><th>Display Name</th><th>Category</th><th>Effect</th><th>Mode</th><th>Status</th><th>Issues</th><th>Subscription</th></tr></thead><tbody>`;
-
-  policies.forEach((p, i) => {
-    const sev = p.severity;
-    const badgeCls = sev==='error'?'b-err':sev==='warning'?'b-warn':sev==='info'?'b-info':'b-ok';
-    const sevLabel = sev==='error'?'Error':sev==='warning'?'Warning':sev==='info'?'Info':'Healthy';
-    const total = (p.issue_count||0)+(p.warning_count||0);
+  if (!policies.length) { el.innerHTML = '<div class="empty"><div class="empty-icon">📋</div><p>No custom policies found.</p></div>'; return; }
+  const order = {error:0,warning:1,info:2,ok:3};
+  policies.sort((a,b) => (order[a.severity]||3)-(order[b.severity]||3));
+  let html = `<div class="tbl-wrap"><table id="custom-tbl"><thead><tr><th></th><th>Display Name</th><th>Category</th><th>Effect</th><th>Status</th><th>Issues</th><th>Subscription</th></tr></thead><tbody>`;
+  policies.forEach((p,i) => {
+    const bc = p.severity==='error'?'b-err':p.severity==='warning'?'b-warn':p.severity==='info'?'b-info':'b-ok';
+    const sl = p.severity==='ok'?'Healthy':p.severity.charAt(0).toUpperCase()+p.severity.slice(1);
+    const tot = (p.issue_count||0)+(p.warning_count||0);
     const uid = 'row-'+i;
-    html += `<tr class="clickable" data-sev="${sev}" data-name="${esc((p.display_name||p.name||'').toLowerCase())}" onclick="toggleRow('${uid}',this)">
+    html += `<tr class="clickable" data-sev="${p.severity}" data-name="${esc((p.display_name||p.name||'').toLowerCase())}" onclick="toggleRow('${uid}',this)">
       <td><span class="arr" id="arr-${uid}">&#9654;</span></td>
       <td><strong>${esc(p.display_name||p.name||'')}</strong><br><span class="muted" style="font-size:.72rem">${esc(p.name||'')}</span></td>
       <td>${p.category?`<span class="tag">${esc(p.category)}</span>`:'<span class="muted">-</span>'}</td>
       <td><span class="tag">${esc(p.effect||'Unknown')}</span></td>
-      <td><span class="muted">${esc(p.mode||'')}</span></td>
-      <td><span class="badge ${badgeCls}">${sevLabel}</span></td>
-      <td>${total>0?`<span style="font-weight:700;color:#a4262c">${total}</span>`:'<span class="muted">0</span>'}</td>
+      <td><span class="badge ${bc}">${sl}</span></td>
+      <td>${tot>0?`<span style="font-weight:700;color:#a4262c">${tot}</span>`:'<span class="muted">0</span>'}</td>
       <td class="muted">${esc(p.sub_name||'')}</td>
     </tr>
-    <tr class="exp-row" id="${uid}"><td colspan="8">
-      <div class="detail-box">
-        ${p.description?`<div class="detail-desc">${esc(p.description)}</div>`:''}
-        ${renderIssues([...(p.issues||[]),...(p.warnings||[])])}
-        ${!total?'<span style="color:#107c10;font-weight:600">✓ No issues detected</span>':''}
-      </div>
-    </td></tr>`;
+    <tr class="exp-row" id="${uid}"><td colspan="7"><div class="detail-box">
+      ${p.description?`<div class="detail-desc">${esc(p.description)}</div>`:''}
+      ${renderIssues([...(p.issues||[]),...(p.warnings||[])])}
+      ${!tot?'<span style="color:#107c10;font-weight:600">✓ No issues detected</span>':''}
+    </div></td></tr>`;
   });
-  html += '</tbody></table></div>';
-  el.innerHTML = html;
+  el.innerHTML = html + '</tbody></table></div>';
 }
 
 function renderIssues(issues) {
@@ -469,17 +544,13 @@ function renderRecs(results) {
   const el = document.getElementById('recs-body');
   let all = [];
   results.forEach(r => (r.recommendations||[]).forEach(rec => all.push({...rec, sub_name: r.subscription_name})));
-  if (!all.length) {
-    el.innerHTML = '<div class="empty"><div class="empty-icon">💡</div><p>No built-in alternatives found.</p><p>This could mean your custom policies cover very specific scenarios, or there were no problematic custom policies detected.</p></div>';
-    return;
-  }
+  if (!all.length) { el.innerHTML = '<div class="empty"><div class="empty-icon">💡</div><p>No built-in alternatives found, or no problematic custom policies detected.</p></div>'; return; }
   let html = '';
   all.forEach(rec => {
     const c = rec.custom_policy || {};
     html += `<div class="rec-card">
       <div class="rec-hdr">
-        <div>
-          <div class="rec-custom-name">📝 ${esc(c.display_name||c.name||'')}</div>
+        <div><div class="rec-custom-name">📝 ${esc(c.display_name||c.name||'')}</div>
           <div style="margin-top:4px;display:flex;gap:6px">
             ${c.category?`<span class="tag">${esc(c.category)}</span>`:''}
             ${c.effect?`<span class="tag">${esc(c.effect)}</span>`:''}
@@ -491,9 +562,8 @@ function renderRecs(results) {
       <div class="rec-body">
         ${(rec.matches||[]).map(m => {
           const sc = m.match_score||0;
-          const scCls = sc>=60?'hi':'';
           return `<div class="match-item">
-            <span class="match-score ${scCls}">${sc}%</span>
+            <span class="match-score ${sc>=60?'hi':''}">${sc}%</span>
             <div style="flex:1">
               <div class="match-name">${esc(m.display_name||m.name||'')}</div>
               <div class="match-desc">${esc((m.description||'').substring(0,160))}${(m.description||'').length>160?'...':''}</div>
@@ -512,54 +582,51 @@ function renderRecs(results) {
   el.innerHTML = html;
 }
 
-// ---- Filter/Search ----
+// =====================================================================
+// UI helpers
+// =====================================================================
 function filterCustom(sev, btn) {
   document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
   btn.classList.add('active');
-  const search = document.getElementById('custom-search').value.toLowerCase();
-  applyCustomFilter(sev, search);
+  applyCustomFilter(sev, document.getElementById('custom-search').value.toLowerCase());
 }
 
 function searchCustom(val) {
-  const activeSev = document.querySelector('.filter-btn.active')?.dataset.sev || 'all';
-  const sev = document.querySelector('.filter-btn.active')?.onclick?.toString().match(/'(\w+)'/)?.[1] || 'all';
-  applyCustomFilter(sev, val.toLowerCase());
+  const activeSev = [...document.querySelectorAll('.filter-btn')].find(b => b.classList.contains('active'));
+  const match = activeSev?.textContent?.match(/\b(all|error|warning|ok)\b/i);
+  applyCustomFilter(match ? match[1].toLowerCase() : 'all', val.toLowerCase());
 }
 
 function applyCustomFilter(sev, search) {
-  const rows = document.querySelectorAll('#custom-tbl tbody tr.clickable');
-  rows.forEach(row => {
-    const rowSev = row.dataset.sev || '';
-    const rowName = row.dataset.name || '';
-    const sevMatch = sev === 'all' || rowSev === sev || (sev === 'ok' && rowSev === 'ok') || (sev === 'warning' && (rowSev === 'warning' || rowSev === 'info'));
-    const searchMatch = !search || rowName.includes(search) || row.textContent.toLowerCase().includes(search);
-    const show = sevMatch && searchMatch;
+  document.querySelectorAll('#custom-tbl tbody tr.clickable').forEach(row => {
+    const rs = row.dataset.sev || '';
+    const rn = row.dataset.name || '';
+    const sevOk = sev==='all' || rs===sev || (sev==='warning' && (rs==='warning'||rs==='info'));
+    const srchOk = !search || rn.includes(search) || row.textContent.toLowerCase().includes(search);
+    const show = sevOk && srchOk;
     row.style.display = show ? '' : 'none';
-    // Also hide the expand row
     const uid = row.querySelector('.arr')?.id?.replace('arr-', '');
-    if (uid) document.getElementById(uid).style.display = show ? '' : 'none';
+    if (uid) { const ex = document.getElementById(uid); if (ex) ex.style.display = show ? '' : 'none'; }
   });
 }
 
-// ---- Tabs ----
 function showTab(name) {
   document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
   document.querySelectorAll('.tc').forEach(t => t.classList.remove('active'));
-  document.getElementById('tab-btn-' + name).classList.add('active');
-  document.getElementById('tc-' + name).classList.add('active');
+  document.getElementById('tab-btn-'+name)?.classList.add('active');
+  document.getElementById('tc-'+name)?.classList.add('active');
 }
 
-// ---- Helpers ----
 function toggleRow(uid, row) {
   const exp = document.getElementById(uid);
-  const arr = document.getElementById('arr-' + uid);
-  const isOpen = exp.classList.contains('open');
-  exp.classList.toggle('open', !isOpen);
-  arr.classList.toggle('open', !isOpen);
+  const arr = document.getElementById('arr-'+uid);
+  const open = exp.classList.contains('open');
+  exp.classList.toggle('open', !open);
+  arr.classList.toggle('open', !open);
 }
 
 function setStatus(state, msg) {
-  document.getElementById('status-dot').className = 'status-dot' + (state === 'ok' ? ' ok' : '');
+  document.getElementById('status-dot').className = 'status-dot' + (state==='ok'?' ok':'');
   document.getElementById('status-text').textContent = msg;
 }
 
