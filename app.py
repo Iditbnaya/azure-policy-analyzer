@@ -41,6 +41,18 @@ def _scan_subscription(sub_id, sub_name, credential, builtin_policies):
     analyzed = analyzer.analyze(custom_policies, assignments, compliance)
     recs = recommender.get_recommendations(analyzed["problematic"], builtin_policies)
 
+    # Insights analysis
+    from modules.insights import (
+        find_duplicate_policies,
+        find_deprecated_assignments,
+        find_initiative_opportunities,
+    )
+    insights = {
+        "duplicates": find_duplicate_policies(custom_policies, assignments),
+        "deprecated": find_deprecated_assignments(custom_policies, builtin_policies, assignments),
+        "initiatives": find_initiative_opportunities(custom_policies, assignments, builtin_policies),
+    }
+
     return {
         "subscription_id": sub_id,
         "subscription_name": sub_name,
@@ -51,7 +63,8 @@ def _scan_subscription(sub_id, sub_name, credential, builtin_policies):
             "problematic": analyzed["problematic"],
         },
         "recommendations": recs,
-        "assignments": assignments,  # included for auto-fix
+        "assignments": assignments,
+        "insights": insights,
     }
 
 

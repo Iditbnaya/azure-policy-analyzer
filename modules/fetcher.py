@@ -128,6 +128,7 @@ class PolicyFetcher:
     def get_custom_policies(self, subscription_id: str) -> list:
         try:
             from azure.mgmt.resource import PolicyClient
+            from modules.recommender import _extract_operation
             client = PolicyClient(credential=self.credential, subscription_id=subscription_id)
             policies = []
             for p in client.policy_definitions.list():
@@ -138,6 +139,7 @@ class PolicyFetcher:
                     continue
                 meta = _safe_dict(p.metadata)
                 rule = _safe_dict(p.policy_rule)
+                op = _extract_operation(rule)
                 policies.append({
                     "id": p.id or "",
                     "name": p.name or "",
@@ -149,6 +151,9 @@ class PolicyFetcher:
                     "policy_rule": rule,
                     "metadata": meta,
                     "version": meta.get("version", "") if meta else "",
+                    "deprecated": bool(meta.get("deprecated", False)) if meta else False,
+                    "operation": op["operation"],
+                    "resource_types": list(op["resource_types"]),
                 })
             return policies
         except Exception as e:
@@ -167,11 +172,39 @@ class PolicyFetcher:
                     "policy_definition_id": a.policy_definition_id or "",
                     "scope": a.scope or "",
                     "display_name": a.display_name or a.name or "",
+                    "parameters": _safe_dict(a.parameters) if a.parameters else {},
                 })
             return assignments
         except Exception as e:
             print(f"  [warn] assignments {subscription_id}: {e}")
             return []
+
+    def get_builtin_initiatives(self, subscription_id: str) -> list:
+        """Fetch built-in policy set definitions (initiatives)."""
+        try:
+            from azure.mgmt.resource import PolicyClient
+            client = PolicyClient(credential=self.credential, subscription_id=subscription_id)
+            initiatives = []
+            for p in client.policy_set_definitions.list_built_in():
+                meta = _safe_dict(p.metadata)
+                policy_defs = []
+                for pd in (p.policy_definitions or []):
+                    pid = pd.policy_definition_id or ""
+                    policy_defs.append(pid.split("/")[-1])
+                initiatives.append({
+                    "id": p.id or "",
+                    "name": p.name or "",
+                    "display_name": p.display_name or p.name or "",
+                    "description": p.description or "",
+                    "category": meta.get("category", "") if meta else "",
+                    "policy_definition_names": policy_defs,
+                    "policy_count": len(policy_defs),
+                })
+            return initiatives
+        except Exception as e:
+            print(f"  [warn] initiatives: {e}")
+            return []
+
 
     def get_builtin_policies(self, subscription_id: str) -> list:
         try:
