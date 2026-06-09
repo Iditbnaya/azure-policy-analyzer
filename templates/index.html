@@ -784,11 +784,17 @@ async function triggerRemediation() {
 
 function stopScan() {
   if (activeSSE) { activeSSE.close(); activeSSE = null; }
+  stopActivityTimer();
   const btn = document.getElementById('scan-btn');
   btn.disabled = false;
   btn.innerHTML = '🔍 Analyze Policies';
   document.getElementById('stop-btn').classList.add('hidden');
   document.getElementById('scan-progress').classList.add('hidden');
+  // Reset steps
+  ['auth','builtins','scan','analyze','done'].forEach(s => {
+    const el = document.getElementById('step-'+s);
+    if (el) el.innerHTML = `⬜ ${s.charAt(0).toUpperCase()+s.slice(1)}`;
+  });
   // Show partial results if any came in
   if (accResults.length > 0) {
     renderResults(accResults);
@@ -935,6 +941,9 @@ tr.clickable{cursor:pointer}tr.clickable:hover td{background:#faf9f8}
 /* Confirmation modal */
 .modal-backdrop{position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:1000;display:flex;align-items:center;justify-content:center}
 .modal-backdrop.hidden{display:none!important}
+.step-done-ico{color:#107c10}
+.step-active-ico{color:#0078d4}
+.step-pending-ico{color:#8a8886}
 .modal{background:#fff;border-radius:12px;width:560px;max-width:95vw;max-height:90vh;overflow-y:auto;box-shadow:0 8px 40px rgba(0,0,0,.3)}
 .modal-hdr{padding:20px 24px 14px;border-bottom:2px solid}
 .modal-hdr.danger{border-bottom-color:#a4262c}
@@ -1017,11 +1026,32 @@ tr.clickable{cursor:pointer}tr.clickable:hover td{background:#faf9f8}
           <button class="btn hidden" id="stop-btn" style="background:#a4262c;color:#fff" onclick="stopScan()">⏹ Stop Scan</button>
         </div>
         <div id="scan-progress" class="hidden" style="margin-top:16px">
-          <div style="display:flex;align-items:center;gap:8px">
-            <span class="spin spin-dark" style="width:14px;height:14px;border-width:2px"></span>
-            <span class="muted" id="scan-global-msg">Starting scan...</span>
+          <!-- Main progress bar -->
+          <div style="background:#faf9f8;border:1px solid #edebe9;border-radius:8px;padding:14px">
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+              <div style="display:flex;align-items:center;gap:8px">
+                <span class="spin spin-dark" id="scan-spinner" style="width:14px;height:14px;border-width:2px"></span>
+                <span style="font-size:.84rem;font-weight:600" id="scan-global-msg">Starting scan...</span>
+              </div>
+              <span class="muted" style="font-size:.78rem" id="scan-pct-label">0%</span>
+            </div>
+            <!-- Segmented progress bar -->
+            <div style="height:10px;background:#edebe9;border-radius:5px;overflow:hidden;position:relative">
+              <div id="scan-bar-fill" style="height:100%;background:linear-gradient(90deg,#0078d4,#2899f5);border-radius:5px;width:0%;transition:width .5s ease-in-out"></div>
+            </div>
+            <!-- Step indicators -->
+            <div style="display:flex;justify-content:space-between;margin-top:6px;font-size:.7rem;color:#8a8886">
+              <span id="step-auth" style="display:flex;align-items:center;gap:3px">⬜ Auth</span>
+              <span id="step-builtins" style="display:flex;align-items:center;gap:3px">⬜ Built-ins</span>
+              <span id="step-scan" style="display:flex;align-items:center;gap:3px">⬜ Scanning</span>
+              <span id="step-analyze" style="display:flex;align-items:center;gap:3px">⬜ Analysis</span>
+              <span id="step-done" style="display:flex;align-items:center;gap:3px">⬜ Done</span>
+            </div>
+            <!-- Last activity timestamp -->
+            <div style="margin-top:8px;font-size:.72rem;color:#8a8886" id="scan-last-activity"></div>
           </div>
-          <div class="scan-sub-grid" id="scan-sub-grid"></div>
+          <!-- Per-subscription status grid -->
+          <div class="scan-sub-grid" id="scan-sub-grid" style="margin-top:10px"></div>
         </div>
         <div id="scan-alert" class="hidden" style="margin-top:10px"></div>
       </div>
@@ -1623,31 +1653,104 @@ async function startScan() {
     const r=await fetch('/api/scan/init',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({tenant_id:tenantId,subscription_ids:subIds,subscription_names:subNameMap})});
     scanId=(await r.json()).scan_id;
   } catch(e){showScanAlert('Failed to start scan: '+e.message);btn.disabled=false;btn.innerHTML='🔍 Analyze Policies';return;}
+  setProgress(3, 'Initializing scan...');
+  startActivityTimer();
   activeSSE=new EventSource(`/api/scan/stream/${scanId}`);
   activeSSE.onmessage=e=>{try{handleScanEvent(JSON.parse(e.data));}catch{}};
   activeSSE.onerror=()=>{if(activeSSE){activeSSE.close();activeSSE=null;}btn.disabled=false;btn.innerHTML='🔍 Analyze Policies';document.getElementById('stop-btn').classList.add('hidden');document.getElementById('scan-progress').classList.add('hidden');};
 }
 
+let scanTotal = 0;
+let scanLastActivity = Date.now();
+let scanActivityTimer = null;
+
+function setStep(step) {
+  const steps = ['auth','builtins','scan','analyze','done'];
+  steps.forEach((s,i) => {
+    const el = document.getElementById('step-'+s);
+    if (!el) return;
+    const idx = steps.indexOf(step);
+    if (i < idx) el.innerHTML = `<span class="step-done-ico">✅</span> ${s.charAt(0).toUpperCase()+s.slice(1)}`;
+    else if (i === idx) el.innerHTML = `<span class="step-active-ico"><span class="spin spin-dark" style="width:10px;height:10px;border-width:1.5px;display:inline-block;vertical-align:middle"></span></span> <strong>${s.charAt(0).toUpperCase()+s.slice(1)}</strong>`;
+    else el.innerHTML = `<span class="step-pending-ico">⬜</span> ${s.charAt(0).toUpperCase()+s.slice(1)}`;
+  });
+}
+
+function setProgress(pct, msg) {
+  document.getElementById('scan-bar-fill').style.width = pct + '%';
+  document.getElementById('scan-pct-label').textContent = Math.round(pct) + '%';
+  if (msg) document.getElementById('scan-global-msg').textContent = msg;
+  scanLastActivity = Date.now();
+  updateLastActivity();
+}
+
+function updateLastActivity() {
+  const el = document.getElementById('scan-last-activity');
+  if (el) el.textContent = 'Last activity: ' + new Date().toLocaleTimeString();
+}
+
+function startActivityTimer() {
+  if (scanActivityTimer) clearInterval(scanActivityTimer);
+  scanActivityTimer = setInterval(() => {
+    const sec = Math.round((Date.now() - scanLastActivity) / 1000);
+    const el = document.getElementById('scan-last-activity');
+    if (el && sec > 5) {
+      el.textContent = `Last activity: ${sec}s ago${sec > 30 ? ' - may be slow or stuck, you can stop and retry' : ''}`;
+      el.style.color = sec > 30 ? '#a4262c' : '#8a8886';
+    }
+  }, 1000);
+}
+
+function stopActivityTimer() {
+  if (scanActivityTimer) { clearInterval(scanActivityTimer); scanActivityTimer = null; }
+}
+
 function handleScanEvent(msg) {
-  const btn=document.getElementById('scan-btn'), msgEl=document.getElementById('scan-global-msg');
-  if(msg.type==='start') msgEl.textContent=`Scanning 0 / ${msg.total} subscriptions...`;
-  else if(msg.type==='progress') msgEl.textContent=msg.msg||'';
-  else if(msg.type==='builtins') msgEl.textContent=`${msg.count} built-in policies loaded (${msg.cache_source}). Scanning subscriptions in parallel...`;
-  else if(msg.type==='result') {
+  const btn=document.getElementById('scan-btn');
+  const msgEl=document.getElementById('scan-global-msg');
+
+  if(msg.type==='start') {
+    scanTotal = msg.total;
+    setStep('auth');
+    setProgress(5, `Authenticating to Azure...`);
+  } else if(msg.type==='progress') {
+    setStep('auth');
+    setProgress(8, msg.msg||'Connecting...');
+  } else if(msg.type==='builtins') {
+    setStep('builtins');
+    setProgress(18, `${msg.count} built-in policies loaded (${msg.cache_source})`);
+    setTimeout(() => { setStep('scan'); setProgress(22, `Starting parallel scan of ${scanTotal} subscription${scanTotal!==1?'s':''}...`); }, 400);
+  } else if(msg.type==='result') {
     const r=msg.data; accResults.push(r);
     const s=r.custom_policies?.stats||{};
     updateSubGrid(r.subscription_id,'done',`${s.total||0} custom (${s.errors||0} err, ${s.warnings||0} warn)`);
-    msgEl.textContent=`Completed ${msg.completed} / ${msg.total} subscriptions...`;
+    const pct = 22 + ((msg.completed / msg.total) * 55);
+    setStep(msg.completed < msg.total ? 'scan' : 'analyze');
+    setProgress(pct, `Completed ${msg.completed} / ${msg.total} subscriptions...`);
     renderResults(accResults);
     updateAgentContext(accResults);
   } else if(msg.type==='error') {
     updateSubGrid(msg.data?.subscription_id||'','error',msg.data?.error||'Scan failed');
-    msgEl.textContent=`Completed ${msg.completed} / ${msg.total} subscriptions...`;
+    const pct = 22 + ((msg.completed / msg.total) * 55);
+    setProgress(pct, `${msg.completed} / ${msg.total} done (some errors)`);
+  } else if(msg.type==='ping') {
+    // Keep-alive - just update activity timer
+    updateLastActivity();
   } else if(msg.type==='done') {
-    if(activeSSE){activeSSE.close();activeSSE=null;}
-    btn.disabled=false; btn.innerHTML='🔍 Analyze Policies';
-    document.getElementById('stop-btn').classList.add('hidden');
-    document.getElementById('scan-progress').classList.add('hidden');
+    setStep('done');
+    setProgress(100, 'Scan complete!');
+    stopActivityTimer();
+    setTimeout(() => {
+      if(activeSSE){activeSSE.close();activeSSE=null;}
+      btn.disabled=false; btn.innerHTML='🔍 Analyze Policies';
+      document.getElementById('stop-btn').classList.add('hidden');
+      document.getElementById('scan-progress').classList.add('hidden');
+      // Reset steps for next scan
+      ['auth','builtins','scan','analyze','done'].forEach(s => {
+        const el = document.getElementById('step-'+s);
+        if (el) el.innerHTML = `⬜ ${s.charAt(0).toUpperCase()+s.slice(1)}`;
+      });
+    }, 800);
   }
 }
 
@@ -2960,11 +3063,17 @@ async function triggerRemediation() {
 
 function stopScan() {
   if (activeSSE) { activeSSE.close(); activeSSE = null; }
+  stopActivityTimer();
   const btn = document.getElementById('scan-btn');
   btn.disabled = false;
   btn.innerHTML = '🔍 Analyze Policies';
   document.getElementById('stop-btn').classList.add('hidden');
   document.getElementById('scan-progress').classList.add('hidden');
+  // Reset steps
+  ['auth','builtins','scan','analyze','done'].forEach(s => {
+    const el = document.getElementById('step-'+s);
+    if (el) el.innerHTML = `⬜ ${s.charAt(0).toUpperCase()+s.slice(1)}`;
+  });
   // Show partial results if any came in
   if (accResults.length > 0) {
     renderResults(accResults);
