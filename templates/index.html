@@ -517,9 +517,19 @@ tr.clickable{cursor:pointer}tr.clickable:hover td{background:#faf9f8}
           Built-in policies are updated automatically when Azure APIs change - no more broken definitions or outdated policy rules.
           Click <strong>Auto Fix</strong> on any row to create the new assignment instantly.
         </div>
-        <div class="filter-bar">
-          <input class="search-inp" id="recs-search" type="text" placeholder="Search custom or built-in name..." oninput="filterRecs(this.value)" style="width:280px">
-          <span class="muted" style="font-size:.8rem" id="recs-count-label"></span>
+        <div class="filter-bar" style="flex-wrap:wrap;gap:8px">
+          <button class="filter-btn active" data-recs-filter="all" onclick="setRecsFilter('all',this)">All</button>
+          <button class="filter-btn" data-recs-filter="assigned" onclick="setRecsFilter('assigned',this)">📌 Already Assigned</button>
+          <button class="filter-btn" data-recs-filter="unassigned" onclick="setRecsFilter('unassigned',this)">No Assignment</button>
+          <button class="filter-btn" data-recs-filter="error" onclick="setRecsFilter('error',this)">🔴 Has Issues</button>
+          <select class="search-inp" id="recs-op-filter" onchange="applyRecsFilters()" style="width:190px;padding:5px 10px">
+            <option value="">All operations</option>
+          </select>
+          <select class="search-inp" id="recs-cat-filter" onchange="applyRecsFilters()" style="width:160px;padding:5px 10px">
+            <option value="">All categories</option>
+          </select>
+          <input class="search-inp" id="recs-search" type="text" placeholder="Search name..." oninput="applyRecsFilters()" style="width:200px">
+          <span class="muted" style="font-size:.8rem;margin-left:4px" id="recs-count-label"></span>
         </div>
         <div id="recs-body"></div>
       </div>
@@ -1070,7 +1080,15 @@ function renderRecs(results) {
       sub_id: row.sub_id,
     }));
 
-    h += `<tr class="clickable rec-row" data-search="${esc((c.display_name||c.name||'').toLowerCase()+' '+(m.display_name||'').toLowerCase())}" onclick="toggleRecRow('${uid}',this)">
+        const rowOp = (m.operation||'').toLowerCase();
+    const rowCat = (m.category||'').toLowerCase();
+    h += `<tr class="clickable rec-row"
+      data-search="${esc((c.display_name||c.name||'').toLowerCase()+' '+(m.display_name||'').toLowerCase())}"
+      data-assigned="${hasAssign?'1':'0'}"
+      data-issues="${((c.issue_count||0)+(c.warning_count||0))>0?'1':'0'}"
+      data-op="${esc(rowOp)}"
+      data-cat="${esc(rowCat)}"
+      onclick="toggleRecRow('${uid}',this)">
       <td><span class="arr" id="arr-${uid}">&#9654;</span></td>
       <td>
         <div style="font-weight:700;font-size:.875rem">${esc(c.display_name||c.name||'')}</div>
@@ -1160,6 +1178,7 @@ function renderRecs(results) {
       sub_id: row.sub_id,
     };
   });
+  setTimeout(() => populateRecsDropdowns(), 50);
 }
 
 function toggleRecRow(uid, row) {
@@ -1170,14 +1189,72 @@ function toggleRecRow(uid, row) {
   arr.classList.toggle('open', !open);
 }
 
-function filterRecs(val) {
-  const v = val.toLowerCase();
+let recsActiveFilter = 'all';
+
+function setRecsFilter(val, btn) {
+  recsActiveFilter = val;
+  document.querySelectorAll('[data-recs-filter]').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  applyRecsFilters();
+}
+
+function applyRecsFilters() {
+  const search = (document.getElementById('recs-search')?.value||'').toLowerCase();
+  const opFilter = (document.getElementById('recs-op-filter')?.value||'').toLowerCase();
+  const catFilter = (document.getElementById('recs-cat-filter')?.value||'').toLowerCase();
+  let visible = 0;
+
   document.querySelectorAll('#recs-tbl tbody tr.rec-row').forEach(row => {
-    const match = !v || (row.dataset.search||'').includes(v);
-    row.style.display = match ? '' : 'none';
+    const assigned = row.dataset.assigned === '1';
+    const hasIssues = row.dataset.issues === '1';
+    const op = (row.dataset.op||'').toLowerCase();
+    const cat = (row.dataset.cat||'').toLowerCase();
+    const searchText = row.dataset.search||'';
+
+    let show = true;
+    if (recsActiveFilter === 'assigned' && !assigned) show = false;
+    if (recsActiveFilter === 'unassigned' && assigned) show = false;
+    if (recsActiveFilter === 'error' && !hasIssues) show = false;
+    if (opFilter && op !== opFilter) show = false;
+    if (catFilter && cat !== catFilter) show = false;
+    if (search && !searchText.includes(search)) show = false;
+
+    row.style.display = show ? '' : 'none';
     const uid = row.querySelector('.arr')?.id?.replace('arr-','');
-    if (uid) { const ex = document.getElementById(uid); if(ex) ex.style.display = match?'':'none'; }
+    if (uid) { const ex = document.getElementById(uid); if (ex) ex.style.display = show ? '' : 'none'; }
+    if (show) visible++;
   });
+
+  const lbl = document.getElementById('recs-count-label');
+  if (lbl) lbl.textContent = `Showing ${visible} policies`;
+}
+
+function populateRecsDropdowns(rows) {
+  const ops = new Set(), cats = new Set();
+  rows.forEach(row => {
+    if (row.custom.policy_rule) {
+      const op = (recMatchData['rec-' + rows.indexOf(row)]?.all_matches?.[0]?.operation || '');
+      if (op && op !== 'unknown') ops.add(op);
+    }
+    if (row.best_match.category) cats.add(row.best_match.category);
+  });
+
+  const opSel = document.getElementById('recs-op-filter');
+  const catSel = document.getElementById('recs-cat-filter');
+  if (!opSel || !catSel) return;
+
+  // Rebuild ops from row data attributes after render
+  document.querySelectorAll('#recs-tbl tbody tr.rec-row').forEach(row => {
+    const op = row.dataset.op;
+    const cat = row.dataset.cat;
+    if (op) ops.add(op);
+    if (cat) cats.add(cat);
+  });
+
+  opSel.innerHTML = '<option value="">All operations</option>' +
+    [...ops].sort().map(o => `<option value="${esc(o)}">${esc(o.replace(/_/g,' ').replace(/\b\w/g,c=>c.toUpperCase()))}</option>`).join('');
+  catSel.innerHTML = '<option value="">All categories</option>' +
+    [...cats].sort().map(c => `<option value="${esc(c)}">${esc(c)}</option>`).join('');
 }
 
 function setApiType(t) {
@@ -1631,6 +1708,8 @@ function selectMatch(uid, idx, el) {
 </script>
 </body>
 </html>
+
+
 
 
 
