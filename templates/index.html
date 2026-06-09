@@ -138,6 +138,62 @@ function unesc(s) {
   d.innerHTML = s;
   return d.textContent;
 }
+
+// =====================================================================
+// Azure OpenAI Discovery
+// =====================================================================
+async function discoverOpenAI() {
+  const btn = document.getElementById('discover-btn');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spin" style="width:14px;height:14px;border-width:2px"></span> Scanning subscriptions...';
+  const tenantId = document.getElementById('tenant-id').value.trim();
+  try {
+    const qs = tenantId ? `?tenant_id=${encodeURIComponent(tenantId)}` : '';
+    const r = await fetch('/api/openai/discover' + qs);
+    const d = await r.json();
+    if (d.status === 'none') {
+      document.getElementById('oai-no-models').classList.remove('hidden');
+      document.getElementById('oai-discover-state').classList.add('hidden');
+      return;
+    }
+    if (d.status !== 'ok') throw new Error(d.message);
+
+    // Build dropdown options
+    const sel = document.getElementById('oai-model-select');
+    sel.innerHTML = '<option value="">-- select a model --</option>';
+    (d.resources || []).forEach(res => {
+      (res.deployments || []).forEach(dep => {
+        const opt = document.createElement('option');
+        opt.value = JSON.stringify({endpoint: res.endpoint, deployment: dep, account: res.account_name, sub: res.subscription_name});
+        opt.textContent = `${dep} (${res.account_name} - ${res.subscription_name})`;
+        sel.appendChild(opt);
+      });
+    });
+
+    // Auto-select if only one option
+    if (sel.options.length === 2) {
+      sel.selectedIndex = 1;
+      onModelSelect(sel);
+    }
+
+    document.getElementById('oai-discover-state').classList.add('hidden');
+    document.getElementById('oai-discover-result').classList.remove('hidden');
+  } catch(e) {
+    btn.innerHTML = '🔍 Discover my Azure OpenAI models';
+    alert('Discovery failed: ' + e.message);
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+function onModelSelect(sel) {
+  const detail = document.getElementById('oai-selected-detail');
+  if (!sel.value) { detail.textContent = ''; return; }
+  const v = JSON.parse(sel.value);
+  document.getElementById('agent-endpoint-cred').value = v.endpoint;
+  document.getElementById('agent-deployment-cred').value = v.deployment;
+  detail.innerHTML = `<strong>${esc(v.deployment)}</strong> on <strong>${esc(v.account)}</strong><br>${esc(v.endpoint)}`;
+}
 </script>
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
@@ -415,17 +471,35 @@ tr.clickable{cursor:pointer}tr.clickable:hover td{background:#faf9f8}
                 <button class="type-btn" id="type-azure" onclick="setApiType('azure')">Azure + Key</button>
                 <button class="type-btn" id="type-openai" onclick="setApiType('openai')">OpenAI</button>
               </div>
+
+              <!-- Azure signed-in: auto-discover -->
               <div id="azurecred-fields">
-                <div class="form-group">
-                  <label class="lbl">Endpoint</label>
-                  <input id="agent-endpoint-cred" class="inp" type="text" value="https://phoenix-openai-poc-stm6y.openai.azure.com/" style="font-size:.82rem">
+                <div id="oai-discover-state">
+                  <button class="btn btn-primary" style="width:100%;justify-content:center;font-size:.82rem" id="discover-btn" onclick="discoverOpenAI()">
+                    🔍 Discover my Azure OpenAI models
+                  </button>
+                  <div class="hint" style="margin-top:5px">Scans your subscriptions for GPT deployments you have access to</div>
                 </div>
-                <div class="form-group">
-                  <label class="lbl">Deployment</label>
-                  <input id="agent-deployment-cred" class="inp" type="text" value="gpt-4o" style="font-size:.82rem">
+                <div id="oai-discover-result" class="hidden">
+                  <div class="form-group">
+                    <label class="lbl">Select model</label>
+                    <select id="oai-model-select" class="inp" style="font-size:.82rem" onchange="onModelSelect(this)">
+                      <option value="">-- select --</option>
+                    </select>
+                  </div>
+                  <div id="oai-selected-detail" class="hint" style="margin-top:4px;line-height:1.6"></div>
+                  <input type="hidden" id="agent-endpoint-cred">
+                  <input type="hidden" id="agent-deployment-cred">
                 </div>
-                <div class="hint">Uses your existing Azure sign-in - no key needed</div>
+                <div id="oai-no-models" class="hidden" style="margin-top:8px">
+                  <div class="alert a-warn" style="font-size:.8rem">No Azure OpenAI resources found in your subscriptions.<br>
+                    <a href="https://portal.azure.com/#create/Microsoft.CognitiveServicesOpenAI" target="_blank" style="color:#7a4100;font-weight:700">Create one in Azure Portal ↗</a>
+                  </div>
+                </div>
+                <div class="hint" style="margin-top:6px">Uses your existing Azure sign-in - no key needed</div>
               </div>
+
+              <!-- Azure + Key -->
               <div id="azurekey-fields" class="hidden">
                 <div class="form-group">
                   <label class="lbl">Endpoint</label>
@@ -440,6 +514,8 @@ tr.clickable{cursor:pointer}tr.clickable:hover td{background:#faf9f8}
                   <input id="agent-api-key" class="inp" type="password" placeholder="key..." style="font-size:.82rem">
                 </div>
               </div>
+
+              <!-- OpenAI.com -->
               <div id="openai-fields" class="hidden">
                 <div class="form-group">
                   <label class="lbl">API Key</label>
@@ -1198,9 +1274,67 @@ function unesc(s) {
   d.innerHTML = s;
   return d.textContent;
 }
+
+// =====================================================================
+// Azure OpenAI Discovery
+// =====================================================================
+async function discoverOpenAI() {
+  const btn = document.getElementById('discover-btn');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spin" style="width:14px;height:14px;border-width:2px"></span> Scanning subscriptions...';
+  const tenantId = document.getElementById('tenant-id').value.trim();
+  try {
+    const qs = tenantId ? `?tenant_id=${encodeURIComponent(tenantId)}` : '';
+    const r = await fetch('/api/openai/discover' + qs);
+    const d = await r.json();
+    if (d.status === 'none') {
+      document.getElementById('oai-no-models').classList.remove('hidden');
+      document.getElementById('oai-discover-state').classList.add('hidden');
+      return;
+    }
+    if (d.status !== 'ok') throw new Error(d.message);
+
+    // Build dropdown options
+    const sel = document.getElementById('oai-model-select');
+    sel.innerHTML = '<option value="">-- select a model --</option>';
+    (d.resources || []).forEach(res => {
+      (res.deployments || []).forEach(dep => {
+        const opt = document.createElement('option');
+        opt.value = JSON.stringify({endpoint: res.endpoint, deployment: dep, account: res.account_name, sub: res.subscription_name});
+        opt.textContent = `${dep} (${res.account_name} - ${res.subscription_name})`;
+        sel.appendChild(opt);
+      });
+    });
+
+    // Auto-select if only one option
+    if (sel.options.length === 2) {
+      sel.selectedIndex = 1;
+      onModelSelect(sel);
+    }
+
+    document.getElementById('oai-discover-state').classList.add('hidden');
+    document.getElementById('oai-discover-result').classList.remove('hidden');
+  } catch(e) {
+    btn.innerHTML = '🔍 Discover my Azure OpenAI models';
+    alert('Discovery failed: ' + e.message);
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+function onModelSelect(sel) {
+  const detail = document.getElementById('oai-selected-detail');
+  if (!sel.value) { detail.textContent = ''; return; }
+  const v = JSON.parse(sel.value);
+  document.getElementById('agent-endpoint-cred').value = v.endpoint;
+  document.getElementById('agent-deployment-cred').value = v.deployment;
+  detail.innerHTML = `<strong>${esc(v.deployment)}</strong> on <strong>${esc(v.account)}</strong><br>${esc(v.endpoint)}`;
+}
 </script>
 </body>
 </html>
+
+
 
 
 

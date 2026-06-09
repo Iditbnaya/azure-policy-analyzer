@@ -230,6 +230,77 @@ def scan_stream_route(scan_id):
 
 
 # ---------------------------------------------------------------------------
+# Azure OpenAI discovery route
+# ---------------------------------------------------------------------------
+
+@app.route("/api/openai/discover")
+def discover_openai():
+    """
+    Scan all subscriptions the signed-in user has access to and return
+    all Azure OpenAI accounts + their chat-capable deployments.
+    """
+    tenant_id = request.args.get("tenant_id", "").strip()
+    try:
+        credential = auth_manager.get_credential(tenant_id)
+        subs = auth_manager.list_subscriptions(credential)
+
+        results = []
+        from concurrent.futures import ThreadPoolExecutor, as_completed
+
+        def scan_sub(sub):
+            found = []
+            try:
+                from azure.mgmt.cognitiveservices import CognitiveServicesManagementClient
+                cs = CognitiveServicesManagementClient(credential, sub["id"])
+                for acct in cs.accounts.list():
+                    if (acct.kind or "").lower() != "openai":
+                        continue
+                    endpoint = (acct.properties.endpoint or "").rstrip("/") + "/"
+                    try:
+                        deps = list(cs.deployments.list(
+                            resource_group_name=acct.id.split("/resourceGroups/")[1].split("/")[0],
+                            account_name=acct.name,
+                        ))
+                        chat_deps = [
+                            d.name for d in deps
+                            if d.name and (
+                                "gpt" in (d.name or "").lower()
+                                or "gpt" in ((d.properties.model.name if d.properties and d.properties.model else "") or "").lower()
+                            )
+                        ]
+                        if chat_deps:
+                            found.append({
+                                "account_name": acct.name,
+                                "endpoint": endpoint,
+                                "location": acct.location,
+                                "subscription_name": sub["name"],
+                                "subscription_id": sub["id"],
+                                "deployments": chat_deps,
+                            })
+                    except Exception:
+                        pass
+            except Exception:
+                pass
+            return found
+
+        with ThreadPoolExecutor(max_workers=6) as ex:
+            futures = {ex.submit(scan_sub, s): s for s in subs}
+            for f in as_completed(futures):
+                results.extend(f.result())
+
+        if results:
+            return jsonify({"status": "ok", "resources": results})
+        else:
+            return jsonify({
+                "status": "none",
+                "message": "No Azure OpenAI resources with GPT deployments found in your subscriptions.",
+                "portal_url": "https://portal.azure.com/#create/Microsoft.CognitiveServicesOpenAI",
+            })
+    except Exception as e:
+        return jsonify({"status": "error", "message": str(e)}), 500
+
+
+# ---------------------------------------------------------------------------
 # Auto-fix routes
 # ---------------------------------------------------------------------------
 
