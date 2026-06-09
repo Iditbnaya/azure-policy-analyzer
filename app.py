@@ -94,6 +94,8 @@ def connect():
     tenant_id = data.get("tenant_id", "").strip()
     try:
         credential = auth_manager.get_credential(tenant_id)
+        # Pre-warm token on the main thread so parallel scan workers reuse it from cache
+        credential.get_token("https://management.azure.com/.default")
         subs = auth_manager.list_subscriptions(credential)
         return jsonify({"status": "ok", "subscriptions": subs})
     except Exception as e:
@@ -174,6 +176,15 @@ def scan_stream_route(scan_id):
             return f"data: {json.dumps(data)}\n\n"
 
         yield evt({"type": "start", "total": len(sub_ids)})
+
+        # Pre-warm the credential token on the main thread BEFORE spawning parallel workers.
+        # Without this, multiple threads call get_token() simultaneously -> state mismatch.
+        yield evt({"type": "progress", "msg": "Authenticating..."})
+        try:
+            from azure.core.credentials import TokenRequestOptions
+            credential.get_token("https://management.azure.com/.default")
+        except Exception as e:
+            print(f"  [warn] token pre-warm failed: {e}")
 
         # Load built-in policies from cache (fast)
         yield evt({"type": "progress", "msg": "Loading built-in policies from cache..."})
