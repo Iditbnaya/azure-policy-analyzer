@@ -501,13 +501,16 @@ function renderDashboard(results) {
     ncEl.innerHTML = `<div class="tbl-wrap"><table>
       <thead><tr><th>Assignment</th><th>Non-Compliant Resources</th><th>Policies Affected</th><th></th></tr></thead>
       <tbody>${allCompliance.slice(0,10).map(c => `
-        <tr>
+        <tr style="cursor:pointer" onclick="showDrilldown('${c.policy_assignment_id||''}','${c.policy_assignment_name||''}','${results[0]?.subscription_id||''}')">
           <td><strong>${esc(c.policy_assignment_name||'')}</strong><br>
             <span class="muted" style="font-size:.72rem">${esc(c.policy_assignment_id||'')}</span>
           </td>
           <td><span class="badge b-err">${c.non_compliant_resources}</span></td>
           <td>${c.non_compliant_policies||0}</td>
-          <td><a href="https://portal.azure.com/#view/Microsoft_Azure_Policy/PolicyAssignmentDetailBlade/id/${encodeURIComponent(c.policy_assignment_id||'')}" target="_blank" class="portal-link">View in Portal ↗</a></td>
+          <td>
+            <a href="https://portal.azure.com/#view/Microsoft_Azure_Policy/PolicyAssignmentDetailBlade/id/${encodeURIComponent(c.policy_assignment_id||'')}" target="_blank" class="portal-link" onclick="event.stopPropagation()">Portal ↗</a>
+            &nbsp;<span class="muted" style="font-size:.72rem">🔍 Drill-down</span>
+          </td>
         </tr>`).join('')}
       </tbody></table></div>`;
   }
@@ -537,6 +540,245 @@ function drawDonut(svgId, segments, total) {
   html += `<text x="${cx}" y="${cy-6}" text-anchor="middle" dominant-baseline="middle" style="font-size:18px;font-weight:800;fill:${maxSeg.color}">${total}</text>`;
   html += `<text x="${cx}" y="${cy+10}" text-anchor="middle" style="font-size:9px;fill:#605e5c">total</text>`;
   svg.innerHTML = html;
+}
+
+
+// =====================================================================
+// ALZ Score
+// =====================================================================
+function renderALZScore(results) {
+  const el = document.getElementById('alz-score-section');
+  if (!el) return;
+
+  // Aggregate across subscriptions (use first result's score for now)
+  const alz = results[0]?.alz_score;
+  if (!alz) {
+    el.innerHTML = '<div class="muted" style="font-size:.82rem">No ALZ score data available.</div>';
+    return;
+  }
+
+  const grade = alz.grade || 'F';
+  const gradeColor = grade==='A'?'#107c10':grade==='B'?'#0078d4':grade==='C'?'#7a4100':grade==='D'?'#f7c300':'#a4262c';
+
+  let catBars = (alz.by_category||[]).map(c => {
+    const pct = c.score;
+    const bg = pct>=80?'#107c10':pct>=60?'#0078d4':pct>=40?'#f7c300':'#d13438';
+    return `<div style="margin-bottom:8px">
+      <div style="display:flex;justify-content:space-between;font-size:.78rem;margin-bottom:3px">
+        <span style="font-weight:600">${esc(c.category)}</span>
+        <span style="color:${bg};font-weight:700">${pct}% (${c.covered}/${c.total})</span>
+      </div>
+      <div style="height:7px;background:#edebe9;border-radius:3px;overflow:hidden">
+        <div style="width:${pct}%;height:100%;background:${bg};border-radius:3px;transition:width .8s"></div>
+      </div>
+    </div>`;
+  }).join('');
+
+  let missingList = '';
+  if ((alz.missing||[]).length) {
+    missingList = `<div style="margin-top:14px">
+      <div style="font-size:.8rem;font-weight:700;color:#a4262c;margin-bottom:8px">⚠️ Top Missing ALZ Policies</div>
+      ${alz.missing.slice(0,6).map(m=>`
+        <a href="${esc(m.portal_url||'#')}" target="_blank" style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid #f3f2f1;text-decoration:none;color:inherit">
+          <span class="badge b-err" style="font-size:.7rem;flex-shrink:0">${m.category}</span>
+          <span style="font-size:.82rem;color:#0078d4">${esc(m.name||'')}</span>
+          <span class="muted" style="font-size:.72rem;margin-left:auto">View ↗</span>
+        </a>`).join('')}
+    </div>`;
+  }
+
+  el.innerHTML = `
+    <div style="display:grid;grid-template-columns:140px 1fr;gap:24px;align-items:start">
+      <div style="text-align:center">
+        <div style="font-size:4rem;font-weight:900;color:${gradeColor};line-height:1">${grade}</div>
+        <div style="font-size:2rem;font-weight:800;color:${gradeColor}">${alz.score}%</div>
+        <div style="font-size:.78rem;color:#605e5c;margin-top:4px">${alz.covered_count} of ${alz.total_count} ALZ policies assigned</div>
+        ${results.length>1?`<div class="muted" style="font-size:.72rem;margin-top:4px">Based on first subscription</div>`:''}
+      </div>
+      <div>
+        <div style="font-size:.8rem;font-weight:700;color:#323130;margin-bottom:10px">Coverage by category</div>
+        ${catBars}
+        ${missingList}
+      </div>
+    </div>`;
+}
+
+// =====================================================================
+// Audit→Deny Tracker
+// =====================================================================
+function renderAuditDeny(results) {
+  let all = [];
+  results.forEach(r => (r.insights?.audit_ready||[]).forEach(a => all.push({...a, sub_id: r.subscription_id, sub_name: r.subscription_name})));
+
+  const badge = document.getElementById('badge-audit-ready');
+  if (badge) badge.textContent = all.length;
+
+  const el = document.getElementById('insights-audit-ready');
+  if (!el) return;
+
+  if (!all.length) {
+    el.innerHTML = '<div class="badge b-ok" style="padding:8px 14px">✓ No Audit assignments found that need graduation</div>';
+    return;
+  }
+
+  el.innerHTML = `<div class="tbl-wrap"><table>
+    <thead><tr>
+      <th>Assignment</th>
+      <th>Scope</th>
+      <th>Current Effect</th>
+      <th>Age</th>
+      <th>Status</th>
+      <th>Action</th>
+    </tr></thead>
+    <tbody>${all.map(a => {
+      const tc = a.tier_color || '#605e5c';
+      const assignCtx = esc(JSON.stringify({
+        id: a.assignment_id,
+        name: a.assignment_name,
+        display_name: a.display_name,
+        scope: a.scope,
+        policy_definition_id: a.policy_definition_id,
+        parameters: a.parameters,
+        enforcement_mode: a.enforcement_mode,
+        sub_id: a.sub_id,
+      }));
+      return `<tr>
+        <td>
+          <strong>${esc(a.display_name||a.assignment_name||'')}</strong>
+          <br><span class="muted" style="font-size:.72rem">${esc(a.assignment_name||'')}</span>
+        </td>
+        <td class="muted" style="font-size:.78rem">${esc(a.scope||'')}</td>
+        <td><span class="tag">${esc(a.current_effect||'audit')}</span></td>
+        <td style="font-weight:700;color:${tc}">${a.days_since_created !== null && a.days_since_created !== undefined ? a.days_since_created + ' days' : 'Unknown'}</td>
+        <td><span style="font-size:.78rem;font-weight:700;color:${tc}">${esc(a.tier_label||'')}</span></td>
+        <td>
+          ${a.tier === 'ready' ?
+            `<button class="btn btn-sm" style="background:#a4262c;color:#fff;font-size:.75rem" onclick="confirmUpgradeToDeny(${assignCtx})">🔒 Upgrade to Deny</button>` :
+            `<button class="btn btn-sm" style="background:#f3f2f1;border:1px solid #c8c6c4;color:#605e5c;font-size:.75rem" onclick="confirmUpgradeToDeny(${assignCtx})">Preview upgrade</button>`
+          }
+        </td>
+      </tr>`;
+    }).join('')}
+    </tbody></table></div>`;
+}
+
+// Upgrade to Deny confirmation
+function confirmUpgradeToDeny(ctx) {
+  const tenantId = document.getElementById('tenant-id').value.trim();
+  const days = ctx.days_since_created;
+  const isReady = ctx.tier === 'ready';
+
+  const msg = isReady
+    ? `This assignment has been in Audit mode for ${days} days.\n\nUpgrade to DENY will:\n• Create a new assignment with Deny effect\n• Delete this Audit assignment\n• Resources not compliant will be BLOCKED from creation\n\nProceed?`
+    : `This assignment has been in Audit mode${days!==null?' for '+days+' days':''} (less than 30 days).\n\nUpgrading to Deny before 30 days may block legitimate resources.\n\nAre you SURE you want to proceed?`;
+
+  if (!confirm(msg)) return;
+
+  const btn = event?.target;
+  if (btn) { btn.disabled = true; btn.textContent = 'Upgrading...'; }
+
+  fetch('/api/assignment/upgrade-effect', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({
+      tenant_id: tenantId,
+      subscription_id: ctx.sub_id,
+      assignment: ctx,
+      new_effect: 'Deny',
+      delete_old: true,
+    })
+  }).then(r => r.json()).then(d => {
+    if (d.status === 'ok') {
+      alert(`✅ Assignment upgraded to Deny successfully!${d.old_deleted ? '\nOld Audit assignment removed.' : ''}`);
+      location.reload();
+    } else {
+      alert('Failed: ' + (d.message||'Unknown error'));
+      if (btn) { btn.disabled = false; btn.textContent = '🔒 Upgrade to Deny'; }
+    }
+  }).catch(e => {
+    alert('Error: ' + e.message);
+    if (btn) { btn.disabled = false; }
+  });
+}
+
+// =====================================================================
+// Non-Compliant Resources Drill-down
+// =====================================================================
+let currentDrilldownAssignment = null;
+
+async function showDrilldown(assignmentId, assignmentName, subId) {
+  currentDrilldownAssignment = {id: assignmentId, name: assignmentName, sub_id: subId};
+  document.getElementById('dd-title').textContent = assignmentName || 'Non-Compliant Resources';
+  document.getElementById('dd-subtitle').textContent = assignmentId || '';
+  document.getElementById('dd-body').innerHTML = '<div class="tree-loading"><span class="spin spin-dark" style="width:14px;height:14px;border-width:2px"></span> Loading non-compliant resources...</div>';
+  document.getElementById('drilldown-modal').classList.remove('hidden');
+
+  const tenantId = document.getElementById('tenant-id').value.trim();
+  try {
+    const r = await fetch('/api/drilldown/resources', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({tenant_id: tenantId, subscription_id: subId, assignment_id: assignmentId})
+    });
+    const d = await r.json();
+    if (d.status !== 'ok') throw new Error(d.message);
+
+    const resources = d.resources || [];
+    document.getElementById('dd-subtitle').textContent = `${resources.length} non-compliant resource${resources.length!==1?'s':''} found`;
+
+    if (!resources.length) {
+      document.getElementById('dd-body').innerHTML = '<div class="badge b-ok" style="padding:10px 16px">✓ No non-compliant resources found</div>';
+      return;
+    }
+
+    document.getElementById('dd-body').innerHTML = `<table style="width:100%;border-collapse:collapse;font-size:.82rem">
+      <thead><tr>
+        <th style="text-align:left;padding:8px;background:#faf9f8;border-bottom:2px solid #edebe9">Resource</th>
+        <th style="text-align:left;padding:8px;background:#faf9f8;border-bottom:2px solid #edebe9">Type</th>
+        <th style="text-align:left;padding:8px;background:#faf9f8;border-bottom:2px solid #edebe9">Resource Group</th>
+        <th style="text-align:left;padding:8px;background:#faf9f8;border-bottom:2px solid #edebe9">Portal</th>
+      </tr></thead>
+      <tbody>${resources.map(res => {
+        const resName = res.resource_id.split('/').pop() || res.resource_id;
+        const portalUrl = `https://portal.azure.com/#resource${res.resource_id}`;
+        return `<tr>
+          <td style="padding:7px 8px;border-bottom:1px solid #f3f2f1"><strong>${esc(resName)}</strong><br><span class="muted" style="font-size:.7rem">${esc(res.resource_id||'')}</span></td>
+          <td style="padding:7px 8px;border-bottom:1px solid #f3f2f1"><span class="tag">${esc((res.resource_type||'').split('/').pop())}</span></td>
+          <td style="padding:7px 8px;border-bottom:1px solid #f3f2f1 muted">${esc(res.resource_group||'')}</td>
+          <td style="padding:7px 8px;border-bottom:1px solid #f3f2f1"><a href="${esc(portalUrl)}" target="_blank" class="portal-link" style="font-size:.75rem">View ↗</a></td>
+        </tr>`;
+      }).join('')}</tbody></table>`;
+
+    // Show remediation button if applicable
+    document.getElementById('dd-remediate-btn').style.display = '';
+  } catch(e) {
+    document.getElementById('dd-body').innerHTML = `<div class="alert a-err">Failed to load: ${esc(e.message)}</div>`;
+  }
+}
+
+async function triggerRemediation() {
+  if (!currentDrilldownAssignment) return;
+  if (!confirm('Trigger a remediation task for this assignment? This will attempt to bring non-compliant resources into compliance.')) return;
+  const tenantId = document.getElementById('tenant-id').value.trim();
+  const subId = currentDrilldownAssignment.sub_id;
+  try {
+    const r = await fetch('/api/agent/execute', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({
+        action_type: 'remediate',
+        action_params: {assignment_id: currentDrilldownAssignment.id, assignment_name: currentDrilldownAssignment.name},
+        tenant_id: tenantId,
+        subscription_id: subId,
+      })
+    });
+    const d = await r.json();
+    if (d.status === 'ok') {
+      alert('✅ Remediation task created! Check Azure Portal for progress.');
+    } else {
+      alert('Failed: ' + (d.message||'Unknown error'));
+    }
+  } catch(e) { alert('Error: ' + e.message); }
 }
 
 </script>
@@ -893,6 +1135,17 @@ tr.clickable{cursor:pointer}tr.clickable:hover td{background:#faf9f8}
 
       </div>
 
+      <!-- ALZ Score -->
+      <div class="card" style="margin-top:16px">
+        <div class="card-title" style="display:flex;align-items:center;justify-content:space-between">
+          🏆 ALZ Compliance Score
+          <a href="https://github.com/Azure/Enterprise-Scale/wiki/ALZ-Policies" target="_blank" style="font-size:.78rem;color:#0078d4;font-weight:400">ALZ Reference ↗</a>
+        </div>
+        <div id="alz-score-section">
+          <div class="muted" style="font-size:.82rem">Run a scan to calculate ALZ compliance score.</div>
+        </div>
+      </div>
+
       <!-- Non-Compliant Assignments table -->
       <div class="card" style="margin-top:16px">
         <div class="card-title" style="display:flex;align-items:center;justify-content:space-between">
@@ -916,6 +1169,21 @@ tr.clickable{cursor:pointer}tr.clickable:hover td{background:#faf9f8}
           </div>
           <div id="insights-deprecated">
             <div class="empty" style="padding:20px"><p>Run a scan to detect deprecated or broken assignments.</p></div>
+          </div>
+        </div>
+
+        <!-- Audit→Deny Tracker -->
+        <div style="margin-bottom:28px">
+          <div style="font-weight:700;font-size:.95rem;color:#0078d4;margin-bottom:10px;display:flex;align-items:center;gap:8px">
+            🎓 Audit → Deny Graduation Tracker
+            <span class="badge b-info" id="badge-audit-ready">0</span>
+          </div>
+          <p class="muted" style="font-size:.82rem;margin-bottom:12px">
+            ALZ Best Practice: assign policies as <strong>Audit</strong> for 30 days, then upgrade to <strong>Deny</strong> once you understand the impact.
+            Policies in red have been auditing for 30+ days and are ready to enforce.
+          </p>
+          <div id="insights-audit-ready">
+            <div class="empty" style="padding:20px"><p>Run a scan to see Audit assignments ready for enforcement.</p></div>
           </div>
         </div>
 
@@ -1094,6 +1362,23 @@ tr.clickable{cursor:pointer}tr.clickable:hover td{background:#faf9f8}
     </div>
   </div>
 </div>
+<!-- Drill-down Modal -->
+<div class="modal-backdrop hidden" id="drilldown-modal">
+  <div class="modal" style="width:720px;max-height:85vh">
+    <div class="modal-hdr danger">
+      <div class="modal-title">🔍 <span id="dd-title">Non-Compliant Resources</span></div>
+      <div class="muted" style="font-size:.82rem;margin-top:4px" id="dd-subtitle"></div>
+    </div>
+    <div class="modal-body" style="max-height:55vh;overflow-y:auto">
+      <div id="dd-body"><div class="tree-loading">Loading...</div></div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn" style="background:#f3f2f1;border:1px solid #c8c6c4;color:#323130" onclick="document.getElementById('drilldown-modal').classList.add('hidden')">Close</button>
+      <button class="btn btn-primary" id="dd-remediate-btn" onclick="triggerRemediation()" style="display:none">🔧 Trigger Remediation</button>
+    </div>
+  </div>
+</div>
+
 <!-- Confirmation Modal -->
 <div class="modal-backdrop hidden" id="confirm-modal">
   <div class="modal">
@@ -1374,7 +1659,7 @@ function renderResults(results) {
   document.getElementById('tbadge-compliance').textContent=totalComp;
   document.getElementById('tbadge-custom').textContent=totalErr+totalWarn;
   document.getElementById('tbadge-recs').textContent=totalRecs;
-  renderDashboard(results); renderCompliance(results); renderCustom(results); renderRecs(results); renderInsights(results);
+  renderDashboard(results); renderALZScore(results); renderCompliance(results); renderCustom(results); renderRecs(results); renderInsights(results); renderAuditDeny(results);
   document.getElementById('results').classList.remove('hidden');
   showTab('dashboard');
   document.getElementById('results').scrollIntoView({behavior:'smooth'});
@@ -1384,8 +1669,15 @@ function renderCompliance(results) {
   let all=[];results.forEach(r=>(r.compliance||[]).forEach(c=>all.push({...c,sub_name:r.subscription_name})));
   if(!all.length){el.innerHTML='<div class="empty"><div class="empty-icon">✅</div><p>No non-compliant policy assignments found.</p></div>';return;}
   all.sort((a,b)=>b.non_compliant_resources-a.non_compliant_resources);
-  let h=`<div class="tbl-wrap"><table><thead><tr><th>Policy Assignment</th><th>Subscription</th><th>Non-Compliant Resources</th><th>Policies Affected</th></tr></thead><tbody>`;
-  all.forEach(c=>{h+=`<tr><td><strong>${esc(c.policy_assignment_name)}</strong><br><span class="muted" style="font-size:.72rem">${esc(c.policy_assignment_id||'')}</span></td><td>${esc(c.sub_name||'')}</td><td><span class="badge b-err">${c.non_compliant_resources}</span></td><td>${c.non_compliant_policies||0}</td></tr>`;});
+  let h=`<div class="tbl-wrap"><table><thead><tr><th>Policy Assignment</th><th>Subscription</th><th>Non-Compliant Resources</th><th>Policies Affected</th><th></th></tr></thead><tbody>`;
+  all.forEach(c=>{const subIdForRow=results[0]?.subscription_id||'';
+    h+=`<tr style="cursor:pointer" onclick="showDrilldown('${esc(c.policy_assignment_id||'')}','${esc(c.policy_assignment_name||'')}','${esc(subIdForRow)}')" title="Click to see non-compliant resources">
+      <td><strong>${esc(c.policy_assignment_name)}</strong><br><span class="muted" style="font-size:.72rem">${esc(c.policy_assignment_id||'')}</span></td>
+      <td>${esc(c.sub_name||'')}</td>
+      <td><span class="badge b-err">${c.non_compliant_resources}</span></td>
+      <td>${c.non_compliant_policies||0}</td>
+      <td><span class="muted" style="font-size:.75rem">🔍 click to drill down</span></td>
+    </tr>`;});
   el.innerHTML=h+'</tbody></table></div>';
 }
 function renderCustom(results) {
@@ -2366,13 +2658,16 @@ function renderDashboard(results) {
     ncEl.innerHTML = `<div class="tbl-wrap"><table>
       <thead><tr><th>Assignment</th><th>Non-Compliant Resources</th><th>Policies Affected</th><th></th></tr></thead>
       <tbody>${allCompliance.slice(0,10).map(c => `
-        <tr>
+        <tr style="cursor:pointer" onclick="showDrilldown('${c.policy_assignment_id||''}','${c.policy_assignment_name||''}','${results[0]?.subscription_id||''}')">
           <td><strong>${esc(c.policy_assignment_name||'')}</strong><br>
             <span class="muted" style="font-size:.72rem">${esc(c.policy_assignment_id||'')}</span>
           </td>
           <td><span class="badge b-err">${c.non_compliant_resources}</span></td>
           <td>${c.non_compliant_policies||0}</td>
-          <td><a href="https://portal.azure.com/#view/Microsoft_Azure_Policy/PolicyAssignmentDetailBlade/id/${encodeURIComponent(c.policy_assignment_id||'')}" target="_blank" class="portal-link">View in Portal ↗</a></td>
+          <td>
+            <a href="https://portal.azure.com/#view/Microsoft_Azure_Policy/PolicyAssignmentDetailBlade/id/${encodeURIComponent(c.policy_assignment_id||'')}" target="_blank" class="portal-link" onclick="event.stopPropagation()">Portal ↗</a>
+            &nbsp;<span class="muted" style="font-size:.72rem">🔍 Drill-down</span>
+          </td>
         </tr>`).join('')}
       </tbody></table></div>`;
   }
@@ -2402,6 +2697,245 @@ function drawDonut(svgId, segments, total) {
   html += `<text x="${cx}" y="${cy-6}" text-anchor="middle" dominant-baseline="middle" style="font-size:18px;font-weight:800;fill:${maxSeg.color}">${total}</text>`;
   html += `<text x="${cx}" y="${cy+10}" text-anchor="middle" style="font-size:9px;fill:#605e5c">total</text>`;
   svg.innerHTML = html;
+}
+
+
+// =====================================================================
+// ALZ Score
+// =====================================================================
+function renderALZScore(results) {
+  const el = document.getElementById('alz-score-section');
+  if (!el) return;
+
+  // Aggregate across subscriptions (use first result's score for now)
+  const alz = results[0]?.alz_score;
+  if (!alz) {
+    el.innerHTML = '<div class="muted" style="font-size:.82rem">No ALZ score data available.</div>';
+    return;
+  }
+
+  const grade = alz.grade || 'F';
+  const gradeColor = grade==='A'?'#107c10':grade==='B'?'#0078d4':grade==='C'?'#7a4100':grade==='D'?'#f7c300':'#a4262c';
+
+  let catBars = (alz.by_category||[]).map(c => {
+    const pct = c.score;
+    const bg = pct>=80?'#107c10':pct>=60?'#0078d4':pct>=40?'#f7c300':'#d13438';
+    return `<div style="margin-bottom:8px">
+      <div style="display:flex;justify-content:space-between;font-size:.78rem;margin-bottom:3px">
+        <span style="font-weight:600">${esc(c.category)}</span>
+        <span style="color:${bg};font-weight:700">${pct}% (${c.covered}/${c.total})</span>
+      </div>
+      <div style="height:7px;background:#edebe9;border-radius:3px;overflow:hidden">
+        <div style="width:${pct}%;height:100%;background:${bg};border-radius:3px;transition:width .8s"></div>
+      </div>
+    </div>`;
+  }).join('');
+
+  let missingList = '';
+  if ((alz.missing||[]).length) {
+    missingList = `<div style="margin-top:14px">
+      <div style="font-size:.8rem;font-weight:700;color:#a4262c;margin-bottom:8px">⚠️ Top Missing ALZ Policies</div>
+      ${alz.missing.slice(0,6).map(m=>`
+        <a href="${esc(m.portal_url||'#')}" target="_blank" style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid #f3f2f1;text-decoration:none;color:inherit">
+          <span class="badge b-err" style="font-size:.7rem;flex-shrink:0">${m.category}</span>
+          <span style="font-size:.82rem;color:#0078d4">${esc(m.name||'')}</span>
+          <span class="muted" style="font-size:.72rem;margin-left:auto">View ↗</span>
+        </a>`).join('')}
+    </div>`;
+  }
+
+  el.innerHTML = `
+    <div style="display:grid;grid-template-columns:140px 1fr;gap:24px;align-items:start">
+      <div style="text-align:center">
+        <div style="font-size:4rem;font-weight:900;color:${gradeColor};line-height:1">${grade}</div>
+        <div style="font-size:2rem;font-weight:800;color:${gradeColor}">${alz.score}%</div>
+        <div style="font-size:.78rem;color:#605e5c;margin-top:4px">${alz.covered_count} of ${alz.total_count} ALZ policies assigned</div>
+        ${results.length>1?`<div class="muted" style="font-size:.72rem;margin-top:4px">Based on first subscription</div>`:''}
+      </div>
+      <div>
+        <div style="font-size:.8rem;font-weight:700;color:#323130;margin-bottom:10px">Coverage by category</div>
+        ${catBars}
+        ${missingList}
+      </div>
+    </div>`;
+}
+
+// =====================================================================
+// Audit→Deny Tracker
+// =====================================================================
+function renderAuditDeny(results) {
+  let all = [];
+  results.forEach(r => (r.insights?.audit_ready||[]).forEach(a => all.push({...a, sub_id: r.subscription_id, sub_name: r.subscription_name})));
+
+  const badge = document.getElementById('badge-audit-ready');
+  if (badge) badge.textContent = all.length;
+
+  const el = document.getElementById('insights-audit-ready');
+  if (!el) return;
+
+  if (!all.length) {
+    el.innerHTML = '<div class="badge b-ok" style="padding:8px 14px">✓ No Audit assignments found that need graduation</div>';
+    return;
+  }
+
+  el.innerHTML = `<div class="tbl-wrap"><table>
+    <thead><tr>
+      <th>Assignment</th>
+      <th>Scope</th>
+      <th>Current Effect</th>
+      <th>Age</th>
+      <th>Status</th>
+      <th>Action</th>
+    </tr></thead>
+    <tbody>${all.map(a => {
+      const tc = a.tier_color || '#605e5c';
+      const assignCtx = esc(JSON.stringify({
+        id: a.assignment_id,
+        name: a.assignment_name,
+        display_name: a.display_name,
+        scope: a.scope,
+        policy_definition_id: a.policy_definition_id,
+        parameters: a.parameters,
+        enforcement_mode: a.enforcement_mode,
+        sub_id: a.sub_id,
+      }));
+      return `<tr>
+        <td>
+          <strong>${esc(a.display_name||a.assignment_name||'')}</strong>
+          <br><span class="muted" style="font-size:.72rem">${esc(a.assignment_name||'')}</span>
+        </td>
+        <td class="muted" style="font-size:.78rem">${esc(a.scope||'')}</td>
+        <td><span class="tag">${esc(a.current_effect||'audit')}</span></td>
+        <td style="font-weight:700;color:${tc}">${a.days_since_created !== null && a.days_since_created !== undefined ? a.days_since_created + ' days' : 'Unknown'}</td>
+        <td><span style="font-size:.78rem;font-weight:700;color:${tc}">${esc(a.tier_label||'')}</span></td>
+        <td>
+          ${a.tier === 'ready' ?
+            `<button class="btn btn-sm" style="background:#a4262c;color:#fff;font-size:.75rem" onclick="confirmUpgradeToDeny(${assignCtx})">🔒 Upgrade to Deny</button>` :
+            `<button class="btn btn-sm" style="background:#f3f2f1;border:1px solid #c8c6c4;color:#605e5c;font-size:.75rem" onclick="confirmUpgradeToDeny(${assignCtx})">Preview upgrade</button>`
+          }
+        </td>
+      </tr>`;
+    }).join('')}
+    </tbody></table></div>`;
+}
+
+// Upgrade to Deny confirmation
+function confirmUpgradeToDeny(ctx) {
+  const tenantId = document.getElementById('tenant-id').value.trim();
+  const days = ctx.days_since_created;
+  const isReady = ctx.tier === 'ready';
+
+  const msg = isReady
+    ? `This assignment has been in Audit mode for ${days} days.\n\nUpgrade to DENY will:\n• Create a new assignment with Deny effect\n• Delete this Audit assignment\n• Resources not compliant will be BLOCKED from creation\n\nProceed?`
+    : `This assignment has been in Audit mode${days!==null?' for '+days+' days':''} (less than 30 days).\n\nUpgrading to Deny before 30 days may block legitimate resources.\n\nAre you SURE you want to proceed?`;
+
+  if (!confirm(msg)) return;
+
+  const btn = event?.target;
+  if (btn) { btn.disabled = true; btn.textContent = 'Upgrading...'; }
+
+  fetch('/api/assignment/upgrade-effect', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({
+      tenant_id: tenantId,
+      subscription_id: ctx.sub_id,
+      assignment: ctx,
+      new_effect: 'Deny',
+      delete_old: true,
+    })
+  }).then(r => r.json()).then(d => {
+    if (d.status === 'ok') {
+      alert(`✅ Assignment upgraded to Deny successfully!${d.old_deleted ? '\nOld Audit assignment removed.' : ''}`);
+      location.reload();
+    } else {
+      alert('Failed: ' + (d.message||'Unknown error'));
+      if (btn) { btn.disabled = false; btn.textContent = '🔒 Upgrade to Deny'; }
+    }
+  }).catch(e => {
+    alert('Error: ' + e.message);
+    if (btn) { btn.disabled = false; }
+  });
+}
+
+// =====================================================================
+// Non-Compliant Resources Drill-down
+// =====================================================================
+let currentDrilldownAssignment = null;
+
+async function showDrilldown(assignmentId, assignmentName, subId) {
+  currentDrilldownAssignment = {id: assignmentId, name: assignmentName, sub_id: subId};
+  document.getElementById('dd-title').textContent = assignmentName || 'Non-Compliant Resources';
+  document.getElementById('dd-subtitle').textContent = assignmentId || '';
+  document.getElementById('dd-body').innerHTML = '<div class="tree-loading"><span class="spin spin-dark" style="width:14px;height:14px;border-width:2px"></span> Loading non-compliant resources...</div>';
+  document.getElementById('drilldown-modal').classList.remove('hidden');
+
+  const tenantId = document.getElementById('tenant-id').value.trim();
+  try {
+    const r = await fetch('/api/drilldown/resources', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({tenant_id: tenantId, subscription_id: subId, assignment_id: assignmentId})
+    });
+    const d = await r.json();
+    if (d.status !== 'ok') throw new Error(d.message);
+
+    const resources = d.resources || [];
+    document.getElementById('dd-subtitle').textContent = `${resources.length} non-compliant resource${resources.length!==1?'s':''} found`;
+
+    if (!resources.length) {
+      document.getElementById('dd-body').innerHTML = '<div class="badge b-ok" style="padding:10px 16px">✓ No non-compliant resources found</div>';
+      return;
+    }
+
+    document.getElementById('dd-body').innerHTML = `<table style="width:100%;border-collapse:collapse;font-size:.82rem">
+      <thead><tr>
+        <th style="text-align:left;padding:8px;background:#faf9f8;border-bottom:2px solid #edebe9">Resource</th>
+        <th style="text-align:left;padding:8px;background:#faf9f8;border-bottom:2px solid #edebe9">Type</th>
+        <th style="text-align:left;padding:8px;background:#faf9f8;border-bottom:2px solid #edebe9">Resource Group</th>
+        <th style="text-align:left;padding:8px;background:#faf9f8;border-bottom:2px solid #edebe9">Portal</th>
+      </tr></thead>
+      <tbody>${resources.map(res => {
+        const resName = res.resource_id.split('/').pop() || res.resource_id;
+        const portalUrl = `https://portal.azure.com/#resource${res.resource_id}`;
+        return `<tr>
+          <td style="padding:7px 8px;border-bottom:1px solid #f3f2f1"><strong>${esc(resName)}</strong><br><span class="muted" style="font-size:.7rem">${esc(res.resource_id||'')}</span></td>
+          <td style="padding:7px 8px;border-bottom:1px solid #f3f2f1"><span class="tag">${esc((res.resource_type||'').split('/').pop())}</span></td>
+          <td style="padding:7px 8px;border-bottom:1px solid #f3f2f1 muted">${esc(res.resource_group||'')}</td>
+          <td style="padding:7px 8px;border-bottom:1px solid #f3f2f1"><a href="${esc(portalUrl)}" target="_blank" class="portal-link" style="font-size:.75rem">View ↗</a></td>
+        </tr>`;
+      }).join('')}</tbody></table>`;
+
+    // Show remediation button if applicable
+    document.getElementById('dd-remediate-btn').style.display = '';
+  } catch(e) {
+    document.getElementById('dd-body').innerHTML = `<div class="alert a-err">Failed to load: ${esc(e.message)}</div>`;
+  }
+}
+
+async function triggerRemediation() {
+  if (!currentDrilldownAssignment) return;
+  if (!confirm('Trigger a remediation task for this assignment? This will attempt to bring non-compliant resources into compliance.')) return;
+  const tenantId = document.getElementById('tenant-id').value.trim();
+  const subId = currentDrilldownAssignment.sub_id;
+  try {
+    const r = await fetch('/api/agent/execute', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({
+        action_type: 'remediate',
+        action_params: {assignment_id: currentDrilldownAssignment.id, assignment_name: currentDrilldownAssignment.name},
+        tenant_id: tenantId,
+        subscription_id: subId,
+      })
+    });
+    const d = await r.json();
+    if (d.status === 'ok') {
+      alert('✅ Remediation task created! Check Azure Portal for progress.');
+    } else {
+      alert('Failed: ' + (d.message||'Unknown error'));
+    }
+  } catch(e) { alert('Error: ' + e.message); }
 }
 
 </script>

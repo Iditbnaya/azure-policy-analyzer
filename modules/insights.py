@@ -1,9 +1,84 @@
 """
 Insights analyzer: detects duplicate policies, deprecated assignments,
-and initiative consolidation opportunities.
+initiative consolidation opportunities, and Audit→Deny graduation candidates.
 """
 
 from collections import defaultdict
+from datetime import datetime, timezone
+
+
+def find_audit_ready_for_deny(assignments: list) -> list:
+    """
+    Find Audit assignments that have been running long enough to upgrade to Deny.
+    Returns list of assignments with days_since_created and a readiness tier.
+    """
+    now = datetime.now(timezone.utc)
+    results = []
+
+    for a in assignments:
+        effect = (a.get("effect_param") or "").lower()
+
+        # Detect audit effect: either explicit param or enforcement mode DoNotEnforce
+        is_audit = (
+            effect == "audit"
+            or effect == "auditifnotexists"
+            or a.get("enforcement_mode", "").lower() in ("donotenforce",)
+        )
+        if not is_audit:
+            continue
+
+        # Calculate age
+        created_on = a.get("created_on")
+        days = None
+        if created_on:
+            try:
+                # Handle ISO format with/without Z
+                dt_str = created_on.replace("Z", "+00:00")
+                dt = datetime.fromisoformat(dt_str)
+                if dt.tzinfo is None:
+                    dt = dt.replace(tzinfo=timezone.utc)
+                days = (now - dt).days
+            except Exception:
+                days = None
+
+        # Readiness tier
+        if days is None:
+            tier = "unknown"
+            tier_label = "Age unknown"
+            tier_color = "#8a8886"
+        elif days >= 30:
+            tier = "ready"
+            tier_label = f"{days} days - Ready to enforce"
+            tier_color = "#a4262c"
+        elif days >= 15:
+            tier = "soon"
+            tier_label = f"{days} days - Approaching 30-day threshold"
+            tier_color = "#f7c300"
+        else:
+            tier = "new"
+            tier_label = f"{days} days - Recently assigned"
+            tier_color = "#107c10"
+
+        results.append({
+            "assignment_id": a.get("id", ""),
+            "assignment_name": a.get("name", ""),
+            "display_name": a.get("display_name", ""),
+            "scope": a.get("scope", ""),
+            "policy_definition_id": a.get("policy_definition_id", ""),
+            "current_effect": effect or "audit (enforcement mode)",
+            "days_since_created": days,
+            "created_on": created_on,
+            "tier": tier,
+            "tier_label": tier_label,
+            "tier_color": tier_color,
+            "parameters": a.get("parameters", {}),
+            "enforcement_mode": a.get("enforcement_mode", "Default"),
+        })
+
+    # Sort: ready first, then soon, then new
+    tier_order = {"ready": 0, "soon": 1, "new": 2, "unknown": 3}
+    results.sort(key=lambda x: (tier_order.get(x["tier"], 3), -(x["days_since_created"] or -1)))
+    return results
 
 
 def find_duplicate_policies(custom_policies: list, assignments: list) -> list:

@@ -70,12 +70,18 @@ def _scan_subscription(sub_id, sub_name, credential, builtin_policies):
         find_duplicate_policies,
         find_deprecated_assignments,
         find_initiative_opportunities,
+        find_audit_ready_for_deny,
     )
+    from modules.alz_score import calculate_alz_score
+
     insights = {
         "duplicates": find_duplicate_policies(custom_policies, assignments),
         "deprecated": find_deprecated_assignments(custom_policies, builtin_policies, assignments),
         "initiatives": find_initiative_opportunities(custom_policies, assignments, builtin_policies),
+        "audit_ready": find_audit_ready_for_deny(assignments),
     }
+
+    alz_score = calculate_alz_score(assignments)
 
     return {
         "subscription_id": sub_id,
@@ -91,6 +97,7 @@ def _scan_subscription(sub_id, sub_name, credential, builtin_policies):
         "recommendations": recs,
         "assignments": assignments,
         "insights": insights,
+        "alz_score": alz_score,
     }
 
 
@@ -349,6 +356,127 @@ def discover_openai():
     except Exception as e:
         return jsonify({"status": "error", "message": str(e)}), 500
 
+
+# ---------------------------------------------------------------------------
+# Drill-down: non-compliant resources for a specific assignment
+# ---------------------------------------------------------------------------
+
+@app.route("/api/drilldown/resources", methods=["POST"])
+def drilldown_resources():
+    data = request.json or {}
+    tenant_id = data.get("tenant_id", "").strip()
+    subscription_id = data.get("subscription_id", "").strip()
+    assignment_id = data.get("assignment_id", "").strip()
+
+    if not subscription_id:
+        sub_ids = _LAST_SCAN_CONTEXT.get("sub_ids", [])
+        subscription_id = sub_ids[0] if sub_ids else ""
+
+    if not assignment_id:
+        return jsonify({"status": "error", "message": "assignment_id required"}), 400
+
+    try:
+        credential = auth_manager.get_credential(tenant_id)
+        fetcher = PolicyFetcher(credential)
+        resources = fetcher.get_non_compliant_resources(subscription_id, assignment_id, top=50)
+        return jsonify({"status": "ok", "resources": resources, "count": len(resources)})
+    except Exception as e:
+        import traceback; traceback.print_exc()
+        return jsonify({"status": "error", "message": str(e)}), 500
+
+
+# ---------------------------------------------------------------------------
+# Upgrade assignment effect: Audit → Deny
+# ---------------------------------------------------------------------------
+
+@app.route("/api/assignment/upgrade-effect", methods=["POST"])
+def upgrade_assignment_effect():
+    """
+    Creates a new assignment with Deny effect and optionally deletes the Audit one.
+    """
+    data = request.json or {}
+    tenant_id = data.get("tenant_id", "").strip()
+    subscription_id = data.get("subscription_id", "").strip()
+    old_assignment = data.get("assignment", {})
+    new_effect = data.get("new_effect", "Deny")
+
+    if not subscription_id:
+        sub_ids = _LAST_SCAN_CONTEXT.get("sub_ids", [])
+        subscription_id = sub_ids[0] if sub_ids else ""
+
+    try:
+        credential = auth_manager.get_credential(tenant_id)
+        from azure.mgmt.resource import PolicyClient
+        import re, uuid, json as _json
+
+        client = PolicyClient(credential=credential, subscription_id=subscription_id)
+
+        # Build new parameters with effect updated
+        params = old_assignment.get("parameters", {}) or {}
+        new_params = {}
+        for k, v in params.items():
+            if "effect" in k.lower():
+                new_params[k] = {"value": new_effect}
+            elif isinstance(v, dict):
+                new_params[k] = v
+            else:
+                new_params[k] = {"value": v}
+
+        if not new_params and "effect" not in str(params).lower():
+            # Policy might have effect as param named differently
+            new_params = dict(params)
+            new_params["effect"] = {"value": new_effect}
+
+        # Check if managed identity needed
+        def_id = old_assignment.get("policy_definition_id", "")
+        def_name = def_id.rstrip("/").split("/")[-1]
+        needs_id = False
+        try:
+            if def_id.startswith("/subscriptions/"):
+                p = client.policy_definitions.get(def_name)
+            else:
+                p = client.policy_definitions.get_built_in(def_name)
+            rule_str = _json.dumps(p.policy_rule, default=str).lower() if p.policy_rule else ""
+            needs_id = "deployifnotexists" in rule_str or '"modify"' in rule_str
+        except Exception:
+            pass
+
+        new_name = re.sub(r"[^a-zA-Z0-9\-]", "-", old_assignment.get("display_name", ""))[:60].strip("-") + "-deny"
+
+        props = {
+            "policy_definition_id": def_id,
+            "display_name": old_assignment.get("display_name", "")[:128] + " (Deny)",
+            "enforcement_mode": "Default",
+            "parameters": new_params if new_params else None,
+        }
+        if props["parameters"] is None:
+            del props["parameters"]
+        if needs_id:
+            props["location"] = "westeurope"
+            props["identity"] = {"type": "SystemAssigned"}
+
+        scope = old_assignment.get("scope", f"/subscriptions/{subscription_id}")
+        result = client.policy_assignments.create(scope, new_name[:64], props)
+
+        # Delete old Audit assignment
+        old_scope = old_assignment.get("scope", scope)
+        old_name = old_assignment.get("name", "")
+        deleted = False
+        if old_name and data.get("delete_old", True):
+            try:
+                client.policy_assignments.delete(old_scope, old_name)
+                deleted = True
+            except Exception as e:
+                print(f"  [warn] could not delete old assignment: {e}")
+
+        return jsonify({
+            "status": "ok",
+            "new_assignment_id": result.id,
+            "old_deleted": deleted,
+        })
+    except Exception as e:
+        import traceback; traceback.print_exc()
+        return jsonify({"status": "error", "message": str(e)}), 500
 
 # ---------------------------------------------------------------------------
 # Auto-fix routes

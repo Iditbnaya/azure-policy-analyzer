@@ -225,20 +225,72 @@ class PolicyFetcher:
     def get_policy_assignments(self, subscription_id: str) -> list:
         try:
             from azure.mgmt.resource import PolicyClient
+            from modules.recommender import _extract_operation
             client = PolicyClient(credential=self.credential, subscription_id=subscription_id)
             assignments = []
             for a in client.policy_assignments.list():
+                params = _safe_dict(a.parameters) if a.parameters else {}
+                # Extract current effect from parameters
+                effect = ""
+                for k, v in params.items():
+                    if "effect" in k.lower() and isinstance(v, dict):
+                        effect = str(v.get("value", "")).lower()
+                    elif "effect" in k.lower() and isinstance(v, str):
+                        effect = v.lower()
+
+                # Also detect from policy definition if no param
+                meta = _safe_dict(a.metadata) if a.metadata else {}
+                created_on = None
+                if meta.get("createdOn"):
+                    created_on = str(meta["createdOn"])
+
                 assignments.append({
                     "id": a.id or "",
                     "name": a.name or "",
                     "policy_definition_id": a.policy_definition_id or "",
                     "scope": a.scope or "",
                     "display_name": a.display_name or a.name or "",
-                    "parameters": _safe_dict(a.parameters) if a.parameters else {},
+                    "parameters": params,
+                    "effect_param": effect,  # extracted effect parameter value
+                    "enforcement_mode": str(a.enforcement_mode) if a.enforcement_mode else "Default",
+                    "created_on": created_on,
                 })
             return assignments
         except Exception as e:
             print(f"  [warn] assignments {subscription_id}: {e}")
+            return []
+
+    def get_non_compliant_resources(self, subscription_id: str, assignment_id: str, top: int = 20) -> list:
+        """Get individual non-compliant resources for a specific assignment."""
+        try:
+            from azure.mgmt.policyinsights import PolicyInsightsClient
+            client = PolicyInsightsClient(
+                credential=self.credential,
+                subscription_id=subscription_id,
+            )
+            from azure.mgmt.policyinsights.models import QueryOptions
+            query_opts = QueryOptions(
+                filter=f"PolicyAssignmentId eq '{assignment_id}' and ComplianceState eq 'NonCompliant'",
+                top=top,
+            )
+            result = client.policy_states.list_query_results_for_subscription(
+                policy_states_resource="latest",
+                subscription_id=subscription_id,
+                query_options=query_opts,
+            )
+            resources = []
+            for r in (result or []):
+                resources.append({
+                    "resource_id": r.resource_id or "",
+                    "resource_type": r.resource_type or "",
+                    "resource_group": r.resource_group or "",
+                    "resource_location": r.resource_location or "",
+                    "compliance_state": r.compliance_state or "",
+                    "timestamp": str(r.timestamp) if r.timestamp else "",
+                })
+            return resources
+        except Exception as e:
+            print(f"  [warn] non-compliant resources: {e}")
             return []
 
     def get_builtin_initiatives(self, subscription_id: str) -> list:
