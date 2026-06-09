@@ -57,7 +57,8 @@ def assess_danger(effect: str, scope: str, resource_count: int = 0) -> tuple:
 
 def assign_policy(credential, subscription_id: str, policy_definition_id: str,
                   scope: str, display_name: str, parameters: dict = None,
-                  enforcement_mode: str = "Default") -> dict:
+                  enforcement_mode: str = "Default",
+                  needs_identity: bool = False, location: str = "westeurope") -> dict:
     from azure.mgmt.resource import PolicyClient
     client = PolicyClient(credential=credential, subscription_id=subscription_id)
     name = "apa-" + str(uuid.uuid4())[:8]
@@ -68,12 +69,16 @@ def assign_policy(credential, subscription_id: str, policy_definition_id: str,
     }
     if parameters:
         props["parameters"] = {k: {"value": v} for k, v in parameters.items()}
+    if needs_identity:
+        props["location"] = location
+        props["identity"] = {"type": "SystemAssigned"}
     result = client.policy_assignments.create(scope, name, props)
     return {
         "id": result.id,
         "name": result.name,
         "scope": result.scope,
         "policy_definition_id": result.policy_definition_id,
+        "identity_assigned": needs_identity,
     }
 
 

@@ -390,6 +390,15 @@ def autofix_preview():
         proposed_name = (custom_assignment.get("display_name") or custom_policy.get("display_name") or builtin.display_name or "")
         proposed_name = proposed_name[:100] + " (Built-in)" if len(proposed_name) < 100 else proposed_name[:108] + " [BIn]"
 
+        # Detect if built-in needs managed identity
+        rule_str = ""
+        try:
+            import json as _json
+            rule_str = _json.dumps(builtin.policy_rule, default=str).lower() if builtin.policy_rule else ""
+        except Exception:
+            pass
+        needs_identity = "deployifnotexists" in rule_str or '"modify"' in rule_str
+
         return jsonify({
             "status": "ok",
             "builtin_display_name": builtin.display_name,
@@ -399,6 +408,7 @@ def autofix_preview():
             "mapped_params": mapped_params,
             "unmapped_params": unmapped_builtin,
             "builtin_policy_id": f"/providers/Microsoft.Authorization/policyDefinitions/{builtin_name}",
+            "needs_identity": needs_identity,
         })
     except Exception as e:
         import traceback; traceback.print_exc()
@@ -426,9 +436,22 @@ def autofix_execute():
     try:
         credential = auth_manager.get_credential(tenant_id)
         from modules.policy_actions import assign_policy, delete_assignment
-        import re, uuid
+        from azure.mgmt.resource import PolicyClient
+        import re, uuid, json as _json
 
         safe_name = re.sub(r"[^a-zA-Z0-9\-]", "-", display_name)[:64].strip("-") or "autofix-" + str(uuid.uuid4())[:8]
+
+        # Check if the built-in policy requires a managed identity (DeployIfNotExists / Modify)
+        needs_identity = False
+        location = "westeurope"
+        try:
+            pc = PolicyClient(credential=credential, subscription_id=subscription_id)
+            builtin_name = builtin_policy_id.rstrip("/").split("/")[-1]
+            builtin_def = pc.policy_definitions.get_built_in(builtin_name)
+            rule_str = _json.dumps(builtin_def.policy_rule, default=str).lower() if builtin_def.policy_rule else ""
+            needs_identity = "deployifnotexists" in rule_str or '"modify"' in rule_str
+        except Exception as e:
+            print(f"  [warn] could not check built-in policy rule: {e}")
 
         result = assign_policy(
             credential=credential,
@@ -437,6 +460,8 @@ def autofix_execute():
             scope=scope,
             display_name=display_name,
             parameters={k: v for k, v in parameters.items() if v is not None and v != ""},
+            needs_identity=needs_identity,
+            location=location,
         )
 
         deleted = False

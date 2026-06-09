@@ -76,6 +76,13 @@ async function startAutoFix(btn, escapedJson) {
       });
     }
 
+    // Show managed identity note if needed
+    const identityNote = document.getElementById('af-identity-note');
+    if (d.needs_identity) {
+      identityNote.classList.remove('hidden');
+    } else {
+      identityNote.classList.add('hidden');
+    }
     document.getElementById('autofix-modal').classList.remove('hidden');
   } catch(e) {
     appendChatMsg && appendChatMsg('system', `Auto Fix preview failed: ${esc(e.message)}`);
@@ -599,6 +606,9 @@ tr.clickable{cursor:pointer}tr.clickable:hover td{background:#faf9f8}
       <div class="modal-section" id="af-unmapped-section" style="display:none">
         <div class="modal-section-title" style="color:#a4262c">Required parameters with no value found</div>
         <div style="font-size:.82rem;color:#605e5c" id="af-unmapped-list"></div>
+      </div>
+      <div id="af-identity-note" class="hidden" style="background:#dce9f8;border:1px solid #90c3f5;border-radius:6px;padding:9px 12px;margin-bottom:12px;font-size:.82rem">
+        🔐 <strong>Managed Identity required:</strong> This policy uses DeployIfNotExists or Modify effect. A <strong>SystemAssigned managed identity</strong> will be created automatically with the assignment. You may need to grant it the appropriate roles after creation.
       </div>
       <div style="margin-top:14px">
         <label style="display:flex;align-items:center;gap:8px;font-size:.84rem;cursor:pointer">
@@ -1358,6 +1368,13 @@ async function startAutoFix(btn, escapedJson) {
       });
     }
 
+    // Show managed identity note if needed
+    const identityNote = document.getElementById('af-identity-note');
+    if (d.needs_identity) {
+      identityNote.classList.remove('hidden');
+    } else {
+      identityNote.classList.add('hidden');
+    }
     document.getElementById('autofix-modal').classList.remove('hidden');
   } catch(e) {
     appendChatMsg && appendChatMsg('system', `Auto Fix preview failed: ${esc(e.message)}`);
@@ -1479,6 +1496,7 @@ function onModelSelect(sel) {
 </script>
 </body>
 </html>
+
 
 
 
