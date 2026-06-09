@@ -1,23 +1,18 @@
-
-
-
 """
-Fetches all Azure built-in policy definitions and saves them to data/builtin-policies.json.
+Fetches all Azure built-in policy definitions, extracts semantic fingerprints,
+and saves to data/builtin-policies.json.
 Runs inside GitHub Actions with a Service Principal.
 
 Required environment variables:
-  AZURE_TENANT_ID
-  AZURE_CLIENT_ID
-  AZURE_CLIENT_SECRET
-  AZURE_SUBSCRIPTION_ID
+  AZURE_TENANT_ID, AZURE_CLIENT_ID, AZURE_CLIENT_SECRET, AZURE_SUBSCRIPTION_ID
 """
 
-import json
-import os
-import time
+import json, os, time, sys
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 from azure.identity import ClientSecretCredential
 from azure.mgmt.resource import PolicyClient
+from modules.recommender import _extract_operation
 
 
 def safe_dict(obj):
@@ -51,19 +46,30 @@ def main():
     sub_id = os.environ["AZURE_SUBSCRIPTION_ID"]
     client = PolicyClient(credential=credential, subscription_id=sub_id)
 
-    print("Fetching built-in policy definitions...")
+    print("Fetching built-in policy definitions + extracting semantic fingerprints...")
     policies = []
-    for p in client.policy_definitions.list(filter="policyType eq 'BuiltIn'"):
-        meta = safe_dict(getattr(p, "metadata", None))
+    for i, p in enumerate(client.policy_definitions.list_built_in()):
+        meta = safe_dict(p.metadata)
         rule = safe_dict(p.policy_rule)
-        policies.append({
+        effect = extract_effect(rule)
+
+        # Extract semantic fingerprint
+        op = _extract_operation(rule)
+
+        entry = {
             "id": p.id or "",
             "name": p.name or "",
             "display_name": p.display_name or p.name or "",
             "description": p.description or "",
             "category": meta.get("category", "") if meta else "",
-            "effect": extract_effect(rule),
-        })
+            "effect": effect,
+            # Semantic fingerprint
+            "operation": op["operation"],
+            "resource_types": list(op["resource_types"]),
+        }
+        policies.append(entry)
+        if (i + 1) % 100 == 0:
+            print(f"  Processed {i+1} policies...")
 
     os.makedirs("data", exist_ok=True)
     with open("data/builtin-policies.json", "w", encoding="utf-8") as f:
@@ -75,9 +81,16 @@ def main():
             "updated_iso": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
             "count": len(policies),
             "source": "github-actions",
+            "has_fingerprints": True,
         }, f)
 
-    print(f"Saved {len(policies)} built-in policies to data/builtin-policies.json")
+    # Print operation distribution for visibility
+    from collections import Counter
+    ops = Counter(p["operation"] for p in policies)
+    print(f"\nSaved {len(policies)} built-in policies with fingerprints")
+    print("Operation distribution:")
+    for op_name, count in ops.most_common(15):
+        print(f"  {op_name}: {count}")
 
 
 if __name__ == "__main__":

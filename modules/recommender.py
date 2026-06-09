@@ -250,7 +250,7 @@ class PolicyRecommender:
         return recommendations
 
     def _find_matches(self, custom: dict, builtins: list) -> list:
-        # Extract semantic operation from the policy rule
+        # Extract semantic operation from the custom policy rule
         rule = custom.get("policy_rule") or {}
         op = _extract_operation(rule)
         operation = op["operation"]
@@ -260,7 +260,9 @@ class PolicyRecommender:
         c_name = custom.get("display_name", "").lower()
         c_desc = custom.get("description", "").lower()
         c_cat = custom.get("category", "").lower()
-        c_text = c_name + " " + c_desc
+
+        # Check if the cache has pre-computed fingerprints
+        cache_has_fingerprints = any("operation" in b for b in builtins[:5])
 
         scored = []
         for b in builtins:
@@ -270,75 +272,89 @@ class PolicyRecommender:
             b_cat = b.get("category", "").lower()
             b_effect = b.get("effect", "").lower()
             b_text = b_name + " " + b_desc
+            b_operation = b.get("operation", "unknown")
+            b_resource_types = set(b.get("resource_types", []))
 
-            # 1. Operation match (semantic - highest weight)
+            # --- Operation match ---
             if operation != "unknown":
-                op_score = _builtin_operation_score(b_text, operation)
-                score += op_score
+                if cache_has_fingerprints:
+                    # Direct fingerprint comparison - most accurate
+                    if b_operation == operation:
+                        score += 55
+                    elif b_operation != "unknown" and b_operation.split("_")[0] == operation.split("_")[0]:
+                        # Same family (e.g. tag_add vs tag_inherit)
+                        score += 20
+                else:
+                    # Fallback: keyword scan on built-in description
+                    score += _builtin_operation_score(b_text, operation)
 
-            # 2. Effect match
+            # --- Resource type match ---
+            if resource_types:
+                if cache_has_fingerprints and b_resource_types:
+                    # Direct intersection
+                    overlap = resource_types & b_resource_types
+                    if overlap:
+                        score += 30
+                else:
+                    # Fallback: check built-in name/desc for resource type mention
+                    for rt in resource_types:
+                        rt_short = rt.split("/")[-1].lower()
+                        rt_service = rt.split("/")[0].replace("microsoft.", "").lower()
+                        if rt_short in b_text or rt_service in b_text:
+                            score += 25
+                            break
+
+            # --- Effect match ---
             if custom_effect and custom_effect not in ("parameterized", "unknown"):
-                if custom_effect == b_effect or custom_effect == b_effect.replace("ifnotexists", ""):
+                if custom_effect == b_effect:
                     score += 20
-                elif b_effect == "parameterized" or not b_effect:
+                elif b_effect in ("parameterized", ""):
                     score += 5
 
-            # 3. Resource type match (check built-in name/desc mentions the resource type)
-            if resource_types:
-                for rt in resource_types:
-                    # e.g. "microsoft.keyvault/vaults" -> check for "key vault" in built-in
-                    rt_short = rt.split("/")[-1].lower()  # "vaults"
-                    rt_service = rt.split("/")[0].replace("microsoft.", "").lower()  # "keyvault"
-                    # also try spaced version: "keyvault" -> "key vault"
-                    rt_spaced = re.sub(r'([a-z])([A-Z])', r'\1 \2',
-                                       rt.split("/")[-1]).lower()
-                    if rt_short in b_text or rt_service in b_text or rt_spaced in b_text:
-                        score += 25
-
-            # 4. Category match
+            # --- Category match ---
             if c_cat and b_cat:
                 if c_cat == b_cat:
-                    score += 15
+                    score += 12
                 elif c_cat in b_cat or b_cat in c_cat:
-                    score += 7
+                    score += 6
 
-            # 5. Name similarity (lower weight - names can be misleading)
+            # --- Name similarity (low weight) ---
             if c_name and b_name:
                 sim = SequenceMatcher(None, c_name, b_name).ratio()
-                score += int(sim * 15)
+                score += int(sim * 10)
 
-            # Minimum threshold
             if score >= 35:
                 scored.append({
                     **b,
                     "match_score": min(98, score),
-                    "match_reason": self._explain(op, custom, b, score),
+                    "match_reason": self._explain(op, custom, b, score, cache_has_fingerprints),
                 })
 
-        # Sort by score, deduplicate
         scored.sort(key=lambda x: x["match_score"], reverse=True)
 
-        # Remove obvious wrong-scope suggestions:
-        # If operation is tag_inherit_from_rg, demote "from subscription" matches
+        # Scope filtering: suppress wrong-scope tag inherit suggestions
         if operation == "tag_inherit_from_rg":
             scored = [b for b in scored
                       if "subscription" not in b.get("display_name", "").lower()
                       or b["match_score"] < 60]
-
-        if operation == "tag_inherit_from_subscription":
+        elif operation == "tag_inherit_from_subscription":
             scored = [b for b in scored
                       if "resource group" not in b.get("display_name", "").lower()
                       or b["match_score"] < 60]
 
         return scored[:5]
 
-    def _explain(self, op: dict, custom: dict, builtin: dict, score: int) -> str:
+    def _explain(self, op: dict, custom: dict, builtin: dict, score: int,
+                 cache_has_fingerprints: bool = False) -> str:
         reasons = []
         op_name = op.get("operation", "unknown")
+        b_op = builtin.get("operation", "unknown")
 
         if op_name != "unknown":
-            label = op_name.replace("_", " ").title()
-            reasons.append(f"Same operation: {label}")
+            if cache_has_fingerprints and b_op == op_name:
+                reasons.append(f"Same operation: {op_name.replace('_', ' ').title()} (exact match)")
+            elif op_name != "unknown":
+                reasons.append(f"Same operation: {op_name.replace('_', ' ').title()}")
 
         c_eff = op.get("effect", "")
         b_eff = builtin.get("effect", "").lower()
@@ -348,10 +364,12 @@ class PolicyRecommender:
         if custom.get("category", "").lower() == builtin.get("category", "").lower() and custom.get("category"):
             reasons.append(f"Same category: {builtin.get('category', '')}")
 
-        if op.get("resource_types"):
-            reasons.append(f"Targets same resource type")
+        if op.get("resource_types") and builtin.get("resource_types"):
+            overlap = set(op["resource_types"]) & set(builtin.get("resource_types", []))
+            if overlap:
+                reasons.append(f"Same resource type")
 
         if not reasons:
-            reasons.append("Keyword and description similarity")
+            reasons.append("Description and keyword similarity")
 
         return "; ".join(reasons)

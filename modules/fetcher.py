@@ -176,11 +176,13 @@ class PolicyFetcher:
     def get_builtin_policies(self, subscription_id: str) -> list:
         try:
             from azure.mgmt.resource import PolicyClient
+            from modules.recommender import _extract_operation
             client = PolicyClient(credential=self.credential, subscription_id=subscription_id)
             policies = []
             for p in client.policy_definitions.list_built_in():
                 meta = _safe_dict(p.metadata)
                 rule = _safe_dict(p.policy_rule)
+                op = _extract_operation(rule)
                 policies.append({
                     "id": p.id or "",
                     "name": p.name or "",
@@ -188,6 +190,9 @@ class PolicyFetcher:
                     "description": p.description or "",
                     "category": meta.get("category", "") if meta else "",
                     "effect": _extract_effect(rule),
+                    # Semantic fingerprint - same extractor as custom policies
+                    "operation": op["operation"],
+                    "resource_types": list(op["resource_types"]),
                 })
             return policies
         except Exception as e:
