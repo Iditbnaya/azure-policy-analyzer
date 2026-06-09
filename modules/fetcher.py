@@ -216,20 +216,25 @@ class PolicyFetcher:
     def get_policy_assignments(self, subscription_id: str) -> list:
         try:
             from azure.mgmt.resource import PolicyClient
-            from modules.recommender import _extract_operation
             client = PolicyClient(credential=self.credential, subscription_id=subscription_id)
             assignments = []
             for a in client.policy_assignments.list():
-                params = _safe_dict(a.parameters) if a.parameters else {}
+                # Safely serialize parameters - ParameterValuesValue objects need special handling
+                params = {}
+                if a.parameters:
+                    for k, v in a.parameters.items():
+                        try:
+                            val = v.value if hasattr(v, "value") else v
+                            params[k] = {"value": val}
+                        except Exception:
+                            params[k] = {"value": str(v)}
+
                 # Extract current effect from parameters
                 effect = ""
                 for k, v in params.items():
-                    if "effect" in k.lower() and isinstance(v, dict):
+                    if "effect" in k.lower():
                         effect = str(v.get("value", "")).lower()
-                    elif "effect" in k.lower() and isinstance(v, str):
-                        effect = v.lower()
 
-                # Also detect from policy definition if no param
                 meta = _safe_dict(a.metadata) if a.metadata else {}
                 created_on = None
                 if meta.get("createdOn"):
@@ -242,7 +247,7 @@ class PolicyFetcher:
                     "scope": a.scope or "",
                     "display_name": a.display_name or a.name or "",
                     "parameters": params,
-                    "effect_param": effect,  # extracted effect parameter value
+                    "effect_param": effect,
                     "enforcement_mode": str(a.enforcement_mode) if a.enforcement_mode else "Default",
                     "created_on": created_on,
                 })
