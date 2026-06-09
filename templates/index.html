@@ -201,6 +201,55 @@ function onModelSelect(sel) {
   document.getElementById('agent-deployment-cred').value = v.deployment;
   detail.innerHTML = `<strong>${esc(v.deployment)}</strong> on <strong>${esc(v.account)}</strong><br>${esc(v.endpoint)}`;
 }
+
+// =====================================================================
+// Match selector in expanded rec row
+// =====================================================================
+// Store all_matches data keyed by uid so selectMatch can read it
+const recMatchData = {};
+
+function selectMatch(uid, idx, el) {
+  // Update selector item styles
+  const container = el.parentElement;
+  container.querySelectorAll('.match-selector-item').forEach((item, i) => {
+    item.style.borderColor = i === idx ? '#0078d4' : '#edebe9';
+    item.style.background = i === idx ? '#f0f7ff' : '#fff';
+  });
+
+  const data = recMatchData[uid];
+  if (!data) return;
+  const matches = data.all_matches;
+  const c = data.custom;
+  const assignments = data.assignments;
+  const sub_id = data.sub_id;
+  const sel = matches[idx];
+  if (!sel) return;
+
+  const selId = sel.name ? `/providers/Microsoft.Authorization/policyDefinitions/${sel.name}` : '';
+  const selCtx = esc(JSON.stringify({
+    custom_policy: c,
+    custom_assignments: assignments,
+    builtin_name: sel.name,
+    builtin_display_name: sel.display_name || sel.name,
+    builtin_id: selId,
+    sub_id: sub_id,
+  }));
+
+  const detail = document.getElementById('match-detail-' + uid);
+  if (!detail) return;
+  detail.innerHTML = `
+    <div style="font-weight:700;font-size:.82rem;color:#107c10;margin-bottom:8px">✓ SELECTED BUILT-IN REPLACEMENT</div>
+    <div style="font-weight:700;font-size:.95rem;margin-bottom:6px">${esc(sel.display_name||sel.name||'')}</div>
+    <div style="font-size:.82rem;color:#605e5c;margin-bottom:10px">${esc(sel.description||'')}</div>
+    <div style="font-size:.78rem;background:#dff6dd;border:1px solid #92d9a0;border-radius:5px;padding:8px 10px;margin-bottom:10px">
+      <strong>Why migrate?</strong> Microsoft-maintained - updates automatically when Azure APIs change. No broken definitions, no maintenance.
+    </div>
+    <div style="font-size:.78rem;color:#605e5c;margin-bottom:12px">Match reason: ${esc(sel.match_reason||'')}</div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap">
+      ${sel.name ? `<a class="portal-link" href="https://portal.azure.com/#view/Microsoft_Azure_Policy/PolicyDetailBlade/definitionId/%2Fproviders%2FMicrosoft.Authorization%2FpolicyDefinitions%2F${encodeURIComponent(sel.name)}" target="_blank" style="font-size:.8rem">View in Portal ↗</a>` : ''}
+      ${selId ? `<button class="autofix-btn" id="fix-btn-${uid}" onclick="startAutoFix(this,'${selCtx}')">🔧 Auto Fix with this policy</button>` : ''}
+    </div>`;
+}
 </script>
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
@@ -371,6 +420,8 @@ tr.clickable{cursor:pointer}tr.clickable:hover td{background:#faf9f8}
 .param-src-missing{color:#a4262c;font-weight:700;font-size:.7rem}
 .param-input{width:100%;padding:4px 7px;border:1px solid #c8c6c4;border-radius:3px;font-size:.78rem}
 .assignment-tag{display:inline-flex;align-items:center;gap:5px;background:#dce9f8;color:#004578;border-radius:4px;padding:2px 8px;font-size:.73rem;margin-top:4px}
+.match-selector-item:hover{border-color:#0078d4!important;background:#f0f7ff!important}
+.match-selector-item.selected{border-color:#0078d4!important;background:#f0f7ff!important}
 </style>
 </head>
 <body>
@@ -1043,37 +1094,72 @@ function renderRecs(results) {
       </td>
     </tr>
     <tr class="exp-row" id="${uid}"><td colspan="7">
-      <div class="detail-box" style="display:grid;grid-template-columns:1fr 1fr;gap:20px">
+      <div class="detail-box" style="display:grid;grid-template-columns:260px 1fr;gap:20px">
+
+        <!-- LEFT: Custom policy info + all matches as selectable list -->
         <div>
           <div style="font-weight:700;font-size:.82rem;color:#605e5c;margin-bottom:8px">YOUR CUSTOM POLICY</div>
-          ${c.description ? `<div style="font-size:.82rem;margin-bottom:8px">${esc(c.description)}</div>` : ''}
-          <div style="font-size:.8rem">
+          ${c.description ? `<div style="font-size:.82rem;margin-bottom:8px;color:#323130">${esc(c.description)}</div>` : ''}
+          <div style="font-size:.8rem;margin-bottom:8px">
             ${c.category ? `<span class="tag">${esc(c.category)}</span> ` : ''}
             ${c.effect ? `<span class="tag">Effect: ${esc(c.effect)}</span> ` : ''}
-            ${c.mode ? `<span class="tag">Mode: ${esc(c.mode)}</span>` : ''}
           </div>
-          ${hasAssign ? `<div style="margin-top:8px">${row.assignments.map(a=>`<div class="assignment-tag" style="margin-bottom:3px">📌 ${esc(a.display_name||a.name||'')} <span style="opacity:.7">${esc(a.scope||'')}</span></div>`).join('')}</div>` : '<div style="font-size:.78rem;color:#8a8886;margin-top:8px">Not currently assigned</div>'}
-          ${row.all_matches.length > 1 ? `<div style="margin-top:12px;font-size:.78rem;color:#605e5c;font-weight:700">OTHER MATCHES (${row.all_matches.length-1}):</div>
-          ${row.all_matches.slice(1).map(alt=>`<div style="font-size:.78rem;margin-top:4px">• ${esc(alt.display_name||'')} <span style="color:#8a8886">(${alt.match_score}%)</span></div>`).join('')}` : ''}
+          ${hasAssign ? `<div style="margin-bottom:10px">${row.assignments.map(a=>`<div class="assignment-tag" style="margin-bottom:3px">📌 ${esc(a.display_name||a.name||'')} <span style="opacity:.7;font-size:.7rem">${esc(a.scope||'')}</span></div>`).join('')}</div>` : '<div style="font-size:.78rem;color:#8a8886;margin-bottom:10px">Not currently assigned</div>'}
+
+          <div style="font-weight:700;font-size:.8rem;color:#0078d4;margin-bottom:6px">SELECT BUILT-IN REPLACEMENT:</div>
+          <div style="display:flex;flex-direction:column;gap:4px">
+            ${row.all_matches.map((alt,ai)=>{
+              const altId = alt.name ? `/providers/Microsoft.Authorization/policyDefinitions/${alt.name}` : '';
+              const altCtx = esc(JSON.stringify({custom_policy:c,custom_assignments:row.assignments,builtin_name:alt.name,builtin_display_name:alt.display_name||alt.name,builtin_id:altId,sub_id:row.sub_id}));
+              const sc2 = alt.match_score||0;
+              const scoreColor2 = sc2>=70?'#107c10':sc2>=50?'#7a4100':'#605e5c';
+              return `<div class="match-selector-item ${ai===0?'selected':''}" id="ms-${uid}-${ai}"
+                style="padding:8px 10px;border:2px solid ${ai===0?'#0078d4':'#edebe9'};border-radius:6px;cursor:pointer;background:${ai===0?'#f0f7ff':'#fff'};transition:all .15s"
+                onclick="selectMatch('${uid}',${ai},this)">
+                <div style="display:flex;justify-content:space-between;align-items:center">
+                  <span style="font-size:.82rem;font-weight:700">${esc(alt.display_name||alt.name||'')}</span>
+                  <span style="font-size:.78rem;font-weight:800;color:${scoreColor2}">${sc2}%</span>
+                </div>
+                <div style="font-size:.72rem;color:#8a8886;margin-top:2px">${esc(alt.category||'')} ${alt.effect?'• '+esc(alt.effect):''}</div>
+              </div>`;
+            }).join('')}
+          </div>
         </div>
-        <div>
-          <div style="font-weight:700;font-size:.82rem;color:#107c10;margin-bottom:8px">✓ BUILT-IN REPLACEMENT</div>
-          <div style="font-weight:700;font-size:.9rem;margin-bottom:6px">${esc(m.display_name||m.name||'')}</div>
-          <div style="font-size:.82rem;color:#605e5c;margin-bottom:10px">${esc(m.description||'')}</div>
-          <div style="font-size:.78rem;background:#dff6dd;border:1px solid #92d9a0;border-radius:5px;padding:8px 10px;margin-bottom:10px">
-            <strong>Why migrate?</strong> This is a Microsoft-maintained policy. It updates automatically when Azure APIs change - no more broken definitions, no maintenance required.
-          </div>
-          <div style="font-size:.78rem;color:#605e5c;margin-bottom:8px">Match reason: ${esc(m.match_reason||'')}</div>
-          <div style="display:flex;gap:8px;flex-wrap:wrap">
-            ${m.name ? `<a class="portal-link" href="https://portal.azure.com/#view/Microsoft_Azure_Policy/PolicyDetailBlade/definitionId/%2Fproviders%2FMicrosoft.Authorization%2FpolicyDefinitions%2F${encodeURIComponent(m.name)}" target="_blank" style="font-size:.8rem">View in Portal ↗</a>` : ''}
-            ${builtinId ? `<button class="autofix-btn" onclick="startAutoFix(this,'${fixCtx}')">🔧 Apply Auto Fix</button>` : ''}
-          </div>
+
+        <!-- RIGHT: Detail of selected match (updated dynamically) -->
+        <div id="match-detail-${uid}">
+          ${(()=>{
+            const sel = row.all_matches[0];
+            const selId = sel.name ? `/providers/Microsoft.Authorization/policyDefinitions/${sel.name}` : '';
+            const selCtx = esc(JSON.stringify({custom_policy:c,custom_assignments:row.assignments,builtin_name:sel.name,builtin_display_name:sel.display_name||sel.name,builtin_id:selId,sub_id:row.sub_id}));
+            return `<div style="font-weight:700;font-size:.82rem;color:#107c10;margin-bottom:8px">✓ SELECTED BUILT-IN REPLACEMENT</div>
+            <div style="font-weight:700;font-size:.95rem;margin-bottom:6px">${esc(sel.display_name||sel.name||'')}</div>
+            <div style="font-size:.82rem;color:#605e5c;margin-bottom:10px">${esc(sel.description||'')}</div>
+            <div style="font-size:.78rem;background:#dff6dd;border:1px solid #92d9a0;border-radius:5px;padding:8px 10px;margin-bottom:10px">
+              <strong>Why migrate?</strong> Microsoft-maintained - updates automatically when Azure APIs change. No broken definitions, no maintenance.
+            </div>
+            <div style="font-size:.78rem;color:#605e5c;margin-bottom:12px">Match reason: ${esc(sel.match_reason||'')}</div>
+            <div style="display:flex;gap:8px;flex-wrap:wrap">
+              ${sel.name ? `<a class="portal-link" href="https://portal.azure.com/#view/Microsoft_Azure_Policy/PolicyDetailBlade/definitionId/%2Fproviders%2FMicrosoft.Authorization%2FpolicyDefinitions%2F${encodeURIComponent(sel.name)}" target="_blank" style="font-size:.8rem">View in Portal ↗</a>` : ''}
+              ${selId ? `<button class="autofix-btn" id="fix-btn-${uid}" onclick="startAutoFix(this,'${selCtx}')">🔧 Auto Fix with this policy</button>` : ''}
+            </div>`;
+          })()}
         </div>
+
       </div>
     </td></tr>`;
   });
 
   el.innerHTML = h + '</tbody></table></div>';
+  // Populate recMatchData for each row so selectMatch() can read it
+  rows.forEach((row, i) => {
+    recMatchData['rec-'+i] = {
+      all_matches: row.all_matches,
+      custom: row.custom,
+      assignments: row.assignments,
+      sub_id: row.sub_id,
+    };
+  });
 }
 
 function toggleRecRow(uid, row) {
@@ -1493,9 +1579,61 @@ function onModelSelect(sel) {
   document.getElementById('agent-deployment-cred').value = v.deployment;
   detail.innerHTML = `<strong>${esc(v.deployment)}</strong> on <strong>${esc(v.account)}</strong><br>${esc(v.endpoint)}`;
 }
+
+// =====================================================================
+// Match selector in expanded rec row
+// =====================================================================
+// Store all_matches data keyed by uid so selectMatch can read it
+const recMatchData = {};
+
+function selectMatch(uid, idx, el) {
+  // Update selector item styles
+  const container = el.parentElement;
+  container.querySelectorAll('.match-selector-item').forEach((item, i) => {
+    item.style.borderColor = i === idx ? '#0078d4' : '#edebe9';
+    item.style.background = i === idx ? '#f0f7ff' : '#fff';
+  });
+
+  const data = recMatchData[uid];
+  if (!data) return;
+  const matches = data.all_matches;
+  const c = data.custom;
+  const assignments = data.assignments;
+  const sub_id = data.sub_id;
+  const sel = matches[idx];
+  if (!sel) return;
+
+  const selId = sel.name ? `/providers/Microsoft.Authorization/policyDefinitions/${sel.name}` : '';
+  const selCtx = esc(JSON.stringify({
+    custom_policy: c,
+    custom_assignments: assignments,
+    builtin_name: sel.name,
+    builtin_display_name: sel.display_name || sel.name,
+    builtin_id: selId,
+    sub_id: sub_id,
+  }));
+
+  const detail = document.getElementById('match-detail-' + uid);
+  if (!detail) return;
+  detail.innerHTML = `
+    <div style="font-weight:700;font-size:.82rem;color:#107c10;margin-bottom:8px">✓ SELECTED BUILT-IN REPLACEMENT</div>
+    <div style="font-weight:700;font-size:.95rem;margin-bottom:6px">${esc(sel.display_name||sel.name||'')}</div>
+    <div style="font-size:.82rem;color:#605e5c;margin-bottom:10px">${esc(sel.description||'')}</div>
+    <div style="font-size:.78rem;background:#dff6dd;border:1px solid #92d9a0;border-radius:5px;padding:8px 10px;margin-bottom:10px">
+      <strong>Why migrate?</strong> Microsoft-maintained - updates automatically when Azure APIs change. No broken definitions, no maintenance.
+    </div>
+    <div style="font-size:.78rem;color:#605e5c;margin-bottom:12px">Match reason: ${esc(sel.match_reason||'')}</div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap">
+      ${sel.name ? `<a class="portal-link" href="https://portal.azure.com/#view/Microsoft_Azure_Policy/PolicyDetailBlade/definitionId/%2Fproviders%2FMicrosoft.Authorization%2FpolicyDefinitions%2F${encodeURIComponent(sel.name)}" target="_blank" style="font-size:.8rem">View in Portal ↗</a>` : ''}
+      ${selId ? `<button class="autofix-btn" id="fix-btn-${uid}" onclick="startAutoFix(this,'${selCtx}')">🔧 Auto Fix with this policy</button>` : ''}
+    </div>`;
+}
 </script>
 </body>
 </html>
+
+
+
 
 
 
