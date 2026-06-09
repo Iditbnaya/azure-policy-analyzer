@@ -1,0 +1,2 @@
+# This file ensures the data/ directory is tracked by git.
+# builtin-policies.json is updated daily by GitHub Actions.

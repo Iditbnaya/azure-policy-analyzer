@@ -2,8 +2,9 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
 <title>Azure Policy Analyzer</title>
+<script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
 body{font-family:'Segoe UI',Tahoma,sans-serif;background:#f0f2f5;color:#1f1f1f;font-size:14px}
@@ -22,15 +23,21 @@ body{font-family:'Segoe UI',Tahoma,sans-serif;background:#f0f2f5;color:#1f1f1f;f
 .inp:focus{border-color:#0078d4;outline:none;box-shadow:0 0 0 2px rgba(0,120,212,.18)}
 .hint{font-size:.75rem;color:#8a8886;margin-top:4px}
 .btn{padding:8px 20px;border:none;border-radius:5px;font-size:.875rem;font-weight:600;cursor:pointer;transition:all .15s;display:inline-flex;align-items:center;gap:6px}
-.btn-primary{background:#0078d4;color:#fff}.btn-primary:hover{background:#106ebe}.btn-primary:disabled{background:#a0a0a0;cursor:not-allowed}
+.btn-primary{background:#0078d4;color:#fff}.btn-primary:hover:not(:disabled){background:#106ebe}.btn-primary:disabled{background:#a0a0a0;cursor:not-allowed}
+.btn-danger{background:#a4262c;color:#fff}.btn-danger:hover:not(:disabled){background:#8a1e24}
+.btn-warn{background:#f7c300;color:#1f1f1f}.btn-warn:hover:not(:disabled){background:#e0b000}
+.btn-sm{padding:5px 13px;font-size:.8rem}
 .badge{display:inline-block;padding:2px 9px;border-radius:11px;font-size:.72rem;font-weight:700;white-space:nowrap}
 .b-err{background:#fde7e9;color:#a4262c}.b-warn{background:#fff4ce;color:#7a4100}.b-info{background:#dce9f8;color:#004578}.b-ok{background:#dff6dd;color:#107c10}
+.b-danger-pill{background:#a4262c;color:#fff;padding:3px 10px;border-radius:11px;font-size:.78rem;font-weight:700}
+.b-warning-pill{background:#f7c300;color:#1f1f1f;padding:3px 10px;border-radius:11px;font-size:.78rem;font-weight:700}
+.b-safe-pill{background:#107c10;color:#fff;padding:3px 10px;border-radius:11px;font-size:.78rem;font-weight:700}
 .stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:14px;margin-bottom:22px}
 .stat{background:#fff;border-radius:8px;padding:16px 14px;text-align:center;box-shadow:0 2px 6px rgba(0,0,0,.07);border-top:3px solid #0078d4}
 .stat.s-err{border-top-color:#a4262c}.stat.s-warn{border-top-color:#f7c300}.stat.s-ok{border-top-color:#107c10}
 .stat-n{font-size:1.9rem;font-weight:800;line-height:1}.stat-l{font-size:.75rem;color:#605e5c;margin-top:5px}
 .n-err{color:#a4262c}.n-warn{color:#7a4100}.n-ok{color:#107c10}.n-blue{color:#0078d4}
-.tabs{display:flex;gap:2px;border-bottom:2px solid #edebe9;margin-bottom:22px}
+.tabs{display:flex;gap:2px;border-bottom:2px solid #edebe9;margin-bottom:22px;flex-wrap:wrap}
 .tab{padding:10px 20px;cursor:pointer;font-size:.875rem;font-weight:600;color:#605e5c;border-bottom:3px solid transparent;margin-bottom:-2px;transition:all .15s;border-radius:5px 5px 0 0}
 .tab:hover{color:#0078d4;background:#f3f9ff}.tab.active{color:#0078d4;border-bottom-color:#0078d4;background:#f0f7ff}
 .tab-badge{background:#0078d4;color:#fff;border-radius:10px;padding:1px 7px;font-size:.7rem;margin-left:6px}
@@ -53,6 +60,7 @@ tr.clickable{cursor:pointer}tr.clickable:hover td{background:#faf9f8}
 .progress-fill{height:100%;background:linear-gradient(90deg,#0078d4,#2899f5);border-radius:3px;transition:width .4s}
 .alert{padding:10px 14px;border-radius:6px;margin-bottom:14px;font-size:.84rem}
 .a-err{background:#fde7e9;color:#a4262c;border:1px solid #f1707b}.a-info{background:#dce9f8;color:#004578;border:1px solid #2899f5}
+.a-warn{background:#fff4ce;color:#7a4100;border:1px solid #f7c300}
 .spin{display:inline-block;width:16px;height:16px;border:2px solid rgba(255,255,255,.3);border-top-color:#fff;border-radius:50%;animation:spin .7s linear infinite}
 .spin-dark{border-color:rgba(0,120,212,.2);border-top-color:#0078d4}
 @keyframes spin{to{transform:rotate(360deg)}}
@@ -74,27 +82,84 @@ tr.clickable{cursor:pointer}tr.clickable:hover td{background:#faf9f8}
 .search-inp{padding:6px 11px;border:1px solid #c8c6c4;border-radius:15px;font-size:.8rem;width:220px}
 .search-inp:focus{outline:none;border-color:#0078d4}
 .muted{color:#8a8886}
-/* --- Management Group Tree --- */
+/* MG Tree */
 .mg-wrap{border:1px solid #edebe9;border-radius:6px;max-height:280px;overflow-y:auto;background:#faf9f8}
 .mg-node{margin:1px 0}
 .mg-hdr{display:flex;align-items:center;gap:6px;padding:5px 8px;cursor:pointer;border-radius:4px;user-select:none}
 .mg-hdr:hover{background:#e8f0fb}
 .mg-arrow{width:14px;text-align:center;font-size:.68rem;color:#0078d4;flex-shrink:0;transition:transform .15s}
 .mg-name{font-size:.84rem;font-weight:600}
-.mg-children{padding-left:18px}
-.mg-children.hidden{display:none}
+.mg-children{padding-left:18px}.mg-children.hidden{display:none}
 .tree-sub{display:flex;align-items:center;gap:7px;padding:4px 8px;border-radius:4px}
 .tree-sub:hover{background:#e8f0fb}
 .tree-sub label{cursor:pointer;font-size:.84rem;flex:1}
 .tree-loading{padding:16px;color:#605e5c;font-size:.84rem;text-align:center}
-/* --- Per-subscription scan status --- */
+/* Scan status */
 .scan-sub-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:6px;margin-top:10px}
 .scan-sub-item{display:flex;align-items:center;gap:8px;padding:7px 10px;border-radius:5px;font-size:.82rem;border:1px solid}
 .scan-sub-item.scanning{background:#dce9f8;border-color:#90c3f5}
 .scan-sub-item.done{background:#dff6dd;border-color:#92d9a0}
 .scan-sub-item.error{background:#fde7e9;border-color:#f4a6ab}
-.sub-stat-name{font-weight:600;flex:1}
-.sub-stat-detail{font-size:.73rem;color:#605e5c;margin-left:4px}
+.sub-stat-name{font-weight:600;flex:1}.sub-stat-detail{font-size:.73rem;color:#605e5c;margin-left:4px}
+/* Cache indicator */
+.cache-pill{display:inline-flex;align-items:center;gap:5px;font-size:.75rem;padding:3px 9px;border-radius:11px;border:1px solid}
+.cache-fresh{background:#dff6dd;color:#107c10;border-color:#92d9a0}
+.cache-stale{background:#fff4ce;color:#7a4100;border-color:#f7c300}
+.cache-empty{background:#f3f2f1;color:#605e5c;border-color:#c8c6c4}
+/* ---- AGENT CHAT ---- */
+.agent-layout{display:grid;grid-template-columns:280px 1fr;gap:20px;height:600px}
+.agent-sidebar{display:flex;flex-direction:column;gap:16px}
+.agent-cfg{background:#faf9f8;border:1px solid #edebe9;border-radius:8px;padding:14px}
+.agent-cfg-title{font-size:.82rem;font-weight:700;margin-bottom:10px;color:#323130}
+.agent-type-row{display:flex;gap:6px;margin-bottom:10px}
+.type-btn{flex:1;padding:5px 8px;border:1px solid #c8c6c4;background:#fff;border-radius:4px;font-size:.78rem;cursor:pointer;text-align:center}
+.type-btn.active{background:#0078d4;color:#fff;border-color:#0078d4}
+.agent-context-box{background:#faf9f8;border:1px solid #edebe9;border-radius:8px;padding:14px;font-size:.78rem;color:#605e5c;flex:1;overflow-y:auto}
+.agent-context-title{font-size:.82rem;font-weight:700;margin-bottom:8px;color:#323130}
+.agent-main{display:flex;flex-direction:column}
+.chat-messages{flex:1;overflow-y:auto;border:1px solid #edebe9;border-radius:8px;padding:14px;background:#fafafa;display:flex;flex-direction:column;gap:12px}
+.chat-msg{max-width:90%;padding:12px 14px;border-radius:10px;font-size:.875rem;line-height:1.6}
+.chat-msg.user{background:#0078d4;color:#fff;align-self:flex-end;border-radius:10px 10px 2px 10px}
+.chat-msg.assistant{background:#fff;border:1px solid #edebe9;align-self:flex-start;border-radius:2px 10px 10px 10px}
+.chat-msg.system{background:#fff4ce;border:1px solid #f7c300;align-self:center;text-align:center;font-size:.8rem;max-width:100%;border-radius:6px;padding:8px 14px}
+.chat-msg .markdown-body h1,.chat-msg .markdown-body h2,.chat-msg .markdown-body h3{font-size:.95rem;margin:.6em 0 .3em}
+.chat-msg .markdown-body p{margin:.4em 0}
+.chat-msg .markdown-body ul,.chat-msg .markdown-body ol{padding-left:1.2em;margin:.3em 0}
+.chat-msg .markdown-body code{background:#f3f2f1;padding:1px 5px;border-radius:3px;font-size:.82rem;font-family:monospace}
+.chat-msg.assistant .markdown-body code{background:#f0f2f5}
+.chat-msg .markdown-body pre{background:#1f1f1f;color:#d4d4d4;padding:12px;border-radius:6px;overflow-x:auto;margin:.5em 0}
+.chat-msg .markdown-body pre code{background:none;padding:0;color:inherit}
+.chat-input-row{display:flex;gap:8px;margin-top:10px;align-items:flex-end}
+.chat-input{flex:1;padding:9px 12px;border:1px solid #c8c6c4;border-radius:8px;font-size:.875rem;resize:none;min-height:40px;max-height:120px;font-family:inherit}
+.chat-input:focus{outline:none;border-color:#0078d4}
+/* Policy JSON card */
+.json-card{background:#1e1e1e;border-radius:8px;margin-top:10px;overflow:hidden}
+.json-card-hdr{display:flex;align-items:center;justify-content:space-between;padding:8px 14px;background:#252526}
+.json-card-title{color:#9cdcfe;font-size:.82rem;font-weight:600;font-family:monospace}
+.json-copy-btn{padding:3px 10px;background:#0078d4;color:#fff;border:none;border-radius:3px;font-size:.75rem;cursor:pointer}
+.json-copy-btn:hover{background:#106ebe}
+.json-body{padding:14px;overflow-x:auto;font-size:.8rem;font-family:monospace;color:#d4d4d4;white-space:pre}
+/* Confirmation modal */
+.modal-backdrop{position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:1000;display:flex;align-items:center;justify-content:center}
+.modal-backdrop.hidden{display:none!important}
+.modal{background:#fff;border-radius:12px;width:560px;max-width:95vw;max-height:90vh;overflow-y:auto;box-shadow:0 8px 40px rgba(0,0,0,.3)}
+.modal-hdr{padding:20px 24px 14px;border-bottom:2px solid}
+.modal-hdr.danger{border-bottom-color:#a4262c}
+.modal-hdr.warning{border-bottom-color:#f7c300}
+.modal-hdr.safe{border-bottom-color:#107c10}
+.modal-title{font-size:1.1rem;font-weight:700;margin-bottom:6px;display:flex;align-items:center;gap:10px}
+.modal-body{padding:20px 24px}
+.modal-section{margin-bottom:16px}
+.modal-section-title{font-size:.8rem;font-weight:700;color:#605e5c;text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px}
+.modal-explanation{font-size:.875rem;line-height:1.6}
+.modal-what{background:#faf9f8;border:1px solid #edebe9;border-radius:6px;padding:12px;font-size:.84rem;line-height:1.6}
+.modal-reasons{list-style:none;padding:0}
+.modal-reasons li{display:flex;gap:8px;padding:5px 0;font-size:.84rem}
+.modal-reasons li::before{content:'⚠';flex-shrink:0}
+.danger .modal-reasons li::before{content:'🔴'}
+.modal-confirm-check{display:flex;align-items:center;gap:8px;background:#fde7e9;border:1px solid #f1707b;border-radius:6px;padding:10px 12px;margin-bottom:16px;font-size:.84rem}
+.modal-confirm-check input{width:16px;height:16px;cursor:pointer}
+.modal-actions{display:flex;gap:10px;justify-content:flex-end;padding:16px 24px;border-top:1px solid #edebe9}
 .hidden{display:none!important}
 </style>
 </head>
@@ -102,7 +167,7 @@ tr.clickable{cursor:pointer}tr.clickable:hover td{background:#faf9f8}
 
 <div class="hdr">
   <div class="hdr-logo">🛡</div>
-  <div><h1>Azure Policy Analyzer</h1><div class="hdr-sub">Custom policy health check and built-in recommendations</div></div>
+  <div><h1>Azure Policy Analyzer</h1><div class="hdr-sub">Custom policy health check, recommendations, and AI-powered agent</div></div>
   <div class="hdr-status" id="hdr-status"><span class="status-dot" id="status-dot"></span><span id="status-text">Not connected</span></div>
 </div>
 
@@ -121,14 +186,18 @@ tr.clickable{cursor:pointer}tr.clickable:hover td{background:#faf9f8}
         <div id="conn-alert"></div>
         <button class="btn btn-primary" id="conn-btn" onclick="connectAzure()">Connect to Azure</button>
         <div class="hint" style="margin-top:8px">A browser window will open for Microsoft sign-in</div>
+        <div style="margin-top:14px">
+          <span class="agent-cfg-title" style="display:block;margin-bottom:6px;font-size:.8rem;font-weight:700;color:#605e5c">Built-in Policy Cache</span>
+          <span id="cache-status-pill" class="cache-pill cache-empty">Loading...</span>
+          <button class="btn btn-sm" style="margin-left:8px;background:#f3f2f1;border:1px solid #c8c6c4;color:#323130" onclick="refreshCache()">Refresh</button>
+        </div>
       </div>
 
-      <!-- Subscription / MG tree panel -->
       <div id="sub-panel" class="hidden">
         <div class="form-group">
           <label class="lbl">Scope - select subscriptions to analyze</label>
           <div class="mg-wrap" id="mg-tree-el">
-            <div class="tree-loading"><span class="spin spin-dark" style="width:14px;height:14px;border-width:2px"></span> Loading management group structure...</div>
+            <div class="tree-loading"><span class="spin spin-dark" style="width:14px;height:14px;border-width:2px"></span> Loading management groups...</div>
           </div>
           <div class="hint" style="margin-top:5px;display:flex;justify-content:space-between">
             <span id="sel-count">0 selected</span>
@@ -138,7 +207,6 @@ tr.clickable{cursor:pointer}tr.clickable:hover td{background:#faf9f8}
         <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
           <button class="btn btn-primary" id="scan-btn" onclick="startScan()">🔍 Analyze Policies</button>
         </div>
-        <!-- Per-subscription scan progress -->
         <div id="scan-progress" class="hidden" style="margin-top:16px">
           <div style="display:flex;align-items:center;gap:8px">
             <span class="spin spin-dark" style="width:14px;height:14px;border-width:2px"></span>
@@ -158,7 +226,9 @@ tr.clickable{cursor:pointer}tr.clickable:hover td{background:#faf9f8}
       <div class="tab active" id="tab-btn-compliance" onclick="showTab('compliance')">Compliance Issues <span class="tab-badge red" id="tbadge-compliance">0</span></div>
       <div class="tab" id="tab-btn-custom" onclick="showTab('custom')">Custom Policy Health <span class="tab-badge amber" id="tbadge-custom">0</span></div>
       <div class="tab" id="tab-btn-recs" onclick="showTab('recs')">Recommendations <span class="tab-badge" id="tbadge-recs">0</span></div>
+      <div class="tab" id="tab-btn-agent" onclick="showTab('agent')">🤖 Policy Agent</div>
     </div>
+
     <div class="tc active" id="tc-compliance">
       <div class="card"><div class="card-title">Non-Compliant Policy Assignments</div><div id="compliance-body"></div></div>
     </div>
@@ -178,23 +248,172 @@ tr.clickable{cursor:pointer}tr.clickable:hover td{background:#faf9f8}
     <div class="tc" id="tc-recs">
       <div class="card">
         <div class="card-title">Built-in Policy Recommendations</div>
-        <p class="muted" style="margin-bottom:16px;font-size:.84rem">These built-in policies could replace your custom ones - they update automatically with Azure, eliminating definition drift and maintenance overhead.</p>
+        <p class="muted" style="margin-bottom:16px;font-size:.84rem">These built-in policies could replace your custom ones - they update automatically with Azure, eliminating definition drift.</p>
         <div id="recs-body"></div>
+      </div>
+    </div>
+
+    <!-- AGENT TAB -->
+    <div class="tc" id="tc-agent">
+      <div class="card">
+        <div class="card-title">🤖 Policy Agent <span class="badge b-info" style="font-size:.72rem;margin-left:8px">Powered by OpenAI</span></div>
+        <div class="agent-layout">
+
+          <!-- Sidebar: config + context -->
+          <div class="agent-sidebar">
+            <div class="agent-cfg">
+              <div class="agent-cfg-title">API Configuration</div>
+              <div class="agent-type-row">
+                <button class="type-btn active" id="type-openai" onclick="setApiType('openai')">OpenAI</button>
+                <button class="type-btn" id="type-azure" onclick="setApiType('azure')">Azure OpenAI</button>
+              </div>
+              <div class="form-group">
+                <label class="lbl">API Key</label>
+                <input id="agent-api-key" class="inp" type="password" placeholder="sk-..." style="font-size:.82rem">
+              </div>
+              <div id="azure-fields" class="hidden">
+                <div class="form-group">
+                  <label class="lbl">Endpoint</label>
+                  <input id="agent-endpoint" class="inp" type="text" placeholder="https://xxx.openai.azure.com" style="font-size:.82rem">
+                </div>
+                <div class="form-group">
+                  <label class="lbl">Deployment name</label>
+                  <input id="agent-deployment" class="inp" type="text" placeholder="gpt-4o" style="font-size:.82rem">
+                </div>
+              </div>
+              <div class="hint">Key is never sent anywhere except your chosen API endpoint</div>
+            </div>
+            <div class="agent-context-box">
+              <div class="agent-context-title">Scan Context</div>
+              <div id="agent-ctx-text" class="muted" style="font-size:.75rem;line-height:1.5">Run a scan first to give the agent context about your policies.</div>
+            </div>
+          </div>
+
+          <!-- Chat area -->
+          <div class="agent-main">
+            <div class="chat-messages" id="chat-messages">
+              <div class="chat-msg system">Hi! I'm your Azure Policy expert. Ask me anything - I can explain policies, write JSON, assign policies, or trigger remediation. I'll always ask for confirmation before making changes.</div>
+            </div>
+            <div id="chat-jsons"></div>
+            <div class="chat-input-row">
+              <textarea id="chat-input" class="chat-input" placeholder="Ask about policies, request JSON, or say 'assign policy X to subscription Y'..." rows="1" onkeydown="chatKeyDown(event)"></textarea>
+              <button class="btn btn-primary" id="chat-send-btn" onclick="sendChat()">Send</button>
+            </div>
+            <div class="hint" style="margin-top:6px">The agent has full context of your scan results. Try: "What's wrong with my custom policies?" or "Write a policy to require tags on all resources"</div>
+          </div>
+        </div>
       </div>
     </div>
   </div>
 
+  <!-- Also show agent tab when no scan yet -->
+  <div id="agent-pre-scan" class="hidden">
+    <div class="card">
+      <div class="card-title">🤖 Policy Agent</div>
+      <p class="muted" style="font-size:.84rem">Run a scan first to use the Policy Agent with your subscription context. Or click the Agent tab after scanning.</p>
+    </div>
+  </div>
+
+</div>
+
+<!-- Confirmation Modal -->
+<div class="modal-backdrop hidden" id="confirm-modal">
+  <div class="modal">
+    <div class="modal-hdr" id="modal-hdr">
+      <div class="modal-title">
+        <span id="modal-icon">⚠️</span>
+        <span id="modal-title-text">Confirm Action</span>
+        <span id="modal-danger-pill" class="b-warning-pill">WARNING</span>
+      </div>
+      <div id="modal-subtitle" class="muted" style="font-size:.82rem;margin-top:4px"></div>
+    </div>
+    <div class="modal-body">
+      <div class="modal-section">
+        <div class="modal-section-title">Why this action</div>
+        <div class="modal-explanation" id="modal-explanation"></div>
+      </div>
+      <div class="modal-section">
+        <div class="modal-section-title">What will happen</div>
+        <div class="modal-what" id="modal-what"></div>
+      </div>
+      <div class="modal-section">
+        <div class="modal-section-title">Risk factors</div>
+        <ul class="modal-reasons" id="modal-reasons"></ul>
+      </div>
+      <div id="modal-danger-confirm" class="modal-confirm-check hidden">
+        <input type="checkbox" id="danger-ack" onchange="updateConfirmBtn()">
+        <label for="danger-ack">I understand the risks and want to proceed with this action</label>
+      </div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn" style="background:#f3f2f1;border:1px solid #c8c6c4;color:#323130" onclick="closeModal()">Cancel</button>
+      <button class="btn btn-danger" id="modal-confirm-btn" onclick="executeAction()">Confirm Action</button>
+    </div>
+  </div>
 </div>
 
 <script>
 // =====================================================================
 // State
 // =====================================================================
-let allSubscriptions = [];   // from connect call
-let mgCounter = 0;           // for unique MG node IDs
-let subNameMap = {};         // sub_id -> display name
-let accResults = [];         // accumulated scan results
+let subNameMap = {};
+let mgCounter = 0;
+let accResults = [];
 let activeSSE = null;
+let chatHistory = [];
+let pendingAction = null;
+let agentApiType = 'openai';
+
+// =====================================================================
+// On page load
+// =====================================================================
+window.addEventListener('load', () => {
+  loadCacheStatus();
+  // Auto-resize textarea
+  document.getElementById('chat-input').addEventListener('input', function() {
+    this.style.height = 'auto';
+    this.style.height = Math.min(this.scrollHeight, 120) + 'px';
+  });
+});
+
+// =====================================================================
+// Cache
+// =====================================================================
+async function loadCacheStatus() {
+  try {
+    const r = await fetch('/api/cache/status');
+    const d = await r.json();
+    const pill = document.getElementById('cache-status-pill');
+    if (d.count > 100) {
+      const label = d.fresh ? `Fresh - ${d.count} policies` : `Stale (${d.age_hours}h) - ${d.count} policies`;
+      pill.className = 'cache-pill ' + (d.fresh ? 'cache-fresh' : 'cache-stale');
+      pill.textContent = label;
+    } else {
+      pill.className = 'cache-pill cache-empty';
+      pill.textContent = 'No cache - will fetch from Azure';
+    }
+  } catch(e) {}
+}
+
+async function refreshCache() {
+  const tenantId = document.getElementById('tenant-id').value.trim();
+  const subIds = [...document.querySelectorAll('.sub-chk:checked')].map(c => c.value);
+  const subId = subIds[0] || '';
+  const pill = document.getElementById('cache-status-pill');
+  pill.className = 'cache-pill cache-stale';
+  pill.textContent = 'Refreshing...';
+  try {
+    const r = await fetch('/api/cache/refresh', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({tenant_id: tenantId, subscription_id: subId})
+    });
+    const d = await r.json();
+    if (d.status === 'ok') {
+      pill.className = 'cache-pill cache-fresh';
+      pill.textContent = `Fresh (${d.source}) - ${d.count} policies`;
+    }
+  } catch(e) { loadCacheStatus(); }
+}
 
 // =====================================================================
 // Connect
@@ -203,318 +422,204 @@ async function connectAzure() {
   const tenantId = document.getElementById('tenant-id').value.trim();
   const btn = document.getElementById('conn-btn');
   const alertEl = document.getElementById('conn-alert');
-
   btn.disabled = true;
   btn.innerHTML = '<span class="spin"></span> Opening browser...';
   alertEl.innerHTML = '<div class="alert a-info">A browser window is opening. Sign in with your Azure account...</div>';
-
   try {
     const res = await fetch('/api/connect', {
-      method: 'POST', headers: {'Content-Type':'application/json'},
+      method:'POST', headers:{'Content-Type':'application/json'},
       body: JSON.stringify({tenant_id: tenantId})
     });
     const data = await res.json();
     if (data.status !== 'ok') throw new Error(data.message || 'Connection failed');
-
-    allSubscriptions = data.subscriptions;
     alertEl.innerHTML = '';
     setStatus('ok', `Connected - ${data.subscriptions.length} subscription(s)`);
     btn.innerHTML = 'Reconnect';
-
-    // Show panel, then load MG tree
     document.getElementById('sub-panel').classList.remove('hidden');
     loadMGTree(tenantId, data.subscriptions);
   } catch (e) {
     alertEl.innerHTML = `<div class="alert a-err">Error: ${esc(e.message)}</div>`;
     btn.innerHTML = 'Connect to Azure';
-  } finally {
-    btn.disabled = false;
-  }
+  } finally { btn.disabled = false; }
 }
 
 // =====================================================================
-// Management Group Tree
+// MG Tree
 // =====================================================================
 async function loadMGTree(tenantId, subscriptions) {
   const el = document.getElementById('mg-tree-el');
   el.innerHTML = '<div class="tree-loading"><span class="spin spin-dark" style="width:14px;height:14px;border-width:2px"></span> Loading management groups...</div>';
-
   try {
     const qs = tenantId ? `?tenant_id=${encodeURIComponent(tenantId)}` : '';
     const res = await fetch('/api/mg-tree' + qs);
     const data = await res.json();
-
     if (data.status === 'ok' && data.tree) {
       mgCounter = 0;
-      const html = renderMGNode(data.tree, 0);
-      el.innerHTML = html;
-      // Auto-check all, update count, update indeterminate states
+      el.innerHTML = renderMGNode(data.tree, 0);
       onSubCheck();
-      // Auto-expand root
-      const firstMGChildren = el.querySelector('.mg-children');
-      if (firstMGChildren) firstMGChildren.classList.remove('hidden');
-      const firstArrow = el.querySelector('.mg-arrow');
-      if (firstArrow) firstArrow.style.transform = 'rotate(90deg)';
-    } else {
-      renderFlatSubList(subscriptions);
-    }
-  } catch (e) {
-    renderFlatSubList(subscriptions);
-  }
+      const fc = el.querySelector('.mg-children');
+      if (fc) fc.classList.remove('hidden');
+      const fa = el.querySelector('.mg-arrow');
+      if (fa) fa.style.transform = 'rotate(90deg)';
+    } else { renderFlatSubList(subscriptions); }
+  } catch { renderFlatSubList(subscriptions); }
 }
 
 function renderMGNode(node, level) {
   const pad = level * 16;
   if (node.type === 'subscription') {
-    const sid = esc(node.id);
-    const sname = esc(node.name);
+    const sid = esc(node.id), sname = esc(node.name);
+    subNameMap[node.id] = node.name;
     return `<div class="tree-sub" style="padding-left:${pad}px">
       <input type="checkbox" class="sub-chk" id="sub-${sid}" value="${sid}" data-name="${sname}" checked onchange="onSubCheck()">
-      <label for="sub-${sid}">🔵 ${sname}</label>
-    </div>`;
+      <label for="sub-${sid}">🔵 ${sname}</label></div>`;
   }
-  // Management group
   const nid = 'mg' + (++mgCounter);
   const subCount = countSubs(node);
-  const children = (node.children || []).map(c => renderMGNode(c, level + 1)).join('');
-
+  const children = (node.children||[]).map(c => renderMGNode(c, level+1)).join('');
   return `<div class="mg-node" style="padding-left:${pad}px">
     <div class="mg-hdr" onclick="toggleMG('${nid}')">
       <span class="mg-arrow" id="arr-${nid}">▶</span>
-      <input type="checkbox" id="chk-${nid}" class="mg-chk" onclick="event.stopPropagation()" onchange="onMGCheck('${nid}', this.checked)">
-      <span>📁</span>
-      <span class="mg-name">${esc(node.name)}</span>
+      <input type="checkbox" id="chk-${nid}" class="mg-chk" onclick="event.stopPropagation()" onchange="onMGCheck('${nid}',this.checked)">
+      <span>📁</span><span class="mg-name">${esc(node.name)}</span>
       <span class="muted" style="font-size:.72rem;margin-left:4px">(${subCount} sub${subCount!==1?'s':''})</span>
     </div>
-    <div class="mg-children hidden" id="ch-${nid}">${children}</div>
-  </div>`;
+    <div class="mg-children hidden" id="ch-${nid}">${children}</div></div>`;
 }
 
 function countSubs(node) {
-  if (node.type === 'subscription') return 1;
-  return (node.children || []).reduce((s, c) => s + countSubs(c), 0);
+  if (node.type==='subscription') return 1;
+  return (node.children||[]).reduce((s,c) => s+countSubs(c),0);
 }
-
 function toggleMG(nid) {
-  const el = document.getElementById('ch-' + nid);
-  const arr = document.getElementById('arr-' + nid);
-  const open = !el.classList.contains('hidden');
-  el.classList.toggle('hidden', open);
-  arr.style.transform = open ? '' : 'rotate(90deg)';
+  const el=document.getElementById('ch-'+nid), arr=document.getElementById('arr-'+nid);
+  const open=!el.classList.contains('hidden');
+  el.classList.toggle('hidden',open);
+  arr.style.transform=open?'':'rotate(90deg)';
 }
-
-function onMGCheck(nid, checked) {
-  const container = document.getElementById('ch-' + nid);
-  if (container) container.querySelectorAll('.sub-chk').forEach(c => { c.checked = checked; });
+function onMGCheck(nid,checked) {
+  document.getElementById('ch-'+nid)?.querySelectorAll('.sub-chk').forEach(c=>{c.checked=checked;});
   onSubCheck();
 }
-
 function onSubCheck() {
-  // Update indeterminate state on all MG checkboxes
-  document.querySelectorAll('.mg-chk').forEach(mgChk => {
-    const nid = mgChk.id.replace('chk-', '');
-    const ch = document.getElementById('ch-' + nid);
-    if (!ch) return;
-    const subs = [...ch.querySelectorAll('.sub-chk')];
-    const n = subs.filter(s => s.checked).length;
-    mgChk.checked = n === subs.length;
-    mgChk.indeterminate = n > 0 && n < subs.length;
+  document.querySelectorAll('.mg-chk').forEach(mc=>{
+    const nid=mc.id.replace('chk-','');
+    const subs=[...document.getElementById('ch-'+nid)?.querySelectorAll('.sub-chk')||[]];
+    const n=subs.filter(s=>s.checked).length;
+    mc.checked=n===subs.length; mc.indeterminate=n>0&&n<subs.length;
   });
   updateSelCount();
 }
-
-function updateSelCount() {
-  const n = document.querySelectorAll('.sub-chk:checked').length;
-  document.getElementById('sel-count').textContent = n + ' subscription' + (n!==1?'s':'') + ' selected';
-}
-
-function selectAll(checked) {
-  document.querySelectorAll('.sub-chk').forEach(c => { c.checked = checked; });
-  onSubCheck();
-}
-
-function getSelectedSubs() {
-  return [...document.querySelectorAll('.sub-chk:checked')].map(c => ({id: c.value, name: c.dataset.name || c.value}));
-}
-
+function updateSelCount(){const n=document.querySelectorAll('.sub-chk:checked').length;document.getElementById('sel-count').textContent=n+' subscription'+(n!==1?'s':'')+' selected';}
+function selectAll(c){document.querySelectorAll('.sub-chk').forEach(x=>{x.checked=c;});onSubCheck();}
+function getSelectedSubs(){return[...document.querySelectorAll('.sub-chk:checked')].map(c=>({id:c.value,name:c.dataset.name||c.value}));}
 function renderFlatSubList(subs) {
-  const el = document.getElementById('mg-tree-el');
-  if (!subs || !subs.length) { el.innerHTML = '<div class="tree-loading">No subscriptions found</div>'; return; }
-  el.innerHTML = subs.map(s =>
-    `<div class="tree-sub" style="padding-left:8px">
-      <input type="checkbox" class="sub-chk" id="sub-${esc(s.id)}" value="${esc(s.id)}" data-name="${esc(s.name)}" ${s.state==='Enabled'?'checked':''} onchange="onSubCheck()">
-      <label for="sub-${esc(s.id)}">🔵 ${esc(s.name)} <span class="muted">(${esc(s.state)})</span></label>
-    </div>`
-  ).join('');
+  const el=document.getElementById('mg-tree-el');
+  if(!subs||!subs.length){el.innerHTML='<div class="tree-loading">No subscriptions found</div>';return;}
+  el.innerHTML=subs.map(s=>{subNameMap[s.id]=s.name;return`<div class="tree-sub" style="padding-left:8px"><input type="checkbox" class="sub-chk" id="sub-${esc(s.id)}" value="${esc(s.id)}" data-name="${esc(s.name)}" ${s.state==='Enabled'?'checked':''} onchange="onSubCheck()"><label for="sub-${esc(s.id)}">🔵 ${esc(s.name)}</label></div>`;}).join('');
   onSubCheck();
 }
 
 // =====================================================================
-// Scan (SSE streaming)
+// Scan (SSE)
 // =====================================================================
 async function startScan() {
-  const tenantId = document.getElementById('tenant-id').value.trim();
-  const selected = getSelectedSubs();
-  if (!selected.length) { alert('Please select at least one subscription.'); return; }
-
-  if (activeSSE) { activeSSE.close(); activeSSE = null; }
-
-  const subIds = selected.map(s => s.id);
-  selected.forEach(s => { subNameMap[s.id] = s.name; });
-
-  const btn = document.getElementById('scan-btn');
-  btn.disabled = true;
-  btn.innerHTML = '<span class="spin"></span> Scanning...';
-
-  accResults = [];
+  const tenantId=document.getElementById('tenant-id').value.trim();
+  const selected=getSelectedSubs();
+  if(!selected.length){alert('Please select at least one subscription.');return;}
+  if(activeSSE){activeSSE.close();activeSSE=null;}
+  const subIds=selected.map(s=>s.id);
+  selected.forEach(s=>{subNameMap[s.id]=s.name;});
+  const btn=document.getElementById('scan-btn');
+  btn.disabled=true; btn.innerHTML='<span class="spin"></span> Scanning...';
+  accResults=[];
   initSubGrid(subIds);
   document.getElementById('scan-progress').classList.remove('hidden');
   document.getElementById('scan-alert').classList.add('hidden');
   document.getElementById('results').classList.add('hidden');
-
-  // POST /api/scan/init to get a scan_id
   let scanId;
   try {
-    const r = await fetch('/api/scan/init', {
-      method: 'POST', headers: {'Content-Type':'application/json'},
-      body: JSON.stringify({tenant_id: tenantId, subscription_ids: subIds, subscription_names: subNameMap})
-    });
-    scanId = (await r.json()).scan_id;
-  } catch (e) {
-    showScanAlert('Failed to start scan: ' + e.message);
-    btn.disabled = false; btn.innerHTML = '🔍 Analyze Policies';
-    return;
-  }
-
-  // Open SSE stream
-  activeSSE = new EventSource(`/api/scan/stream/${scanId}`);
-  activeSSE.onmessage = (e) => {
-    try { handleScanEvent(JSON.parse(e.data)); } catch {}
-  };
-  activeSSE.onerror = () => {
-    if (activeSSE) { activeSSE.close(); activeSSE = null; }
-    btn.disabled = false; btn.innerHTML = '🔍 Analyze Policies';
-    document.getElementById('scan-progress').classList.add('hidden');
-  };
+    const r=await fetch('/api/scan/init',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({tenant_id:tenantId,subscription_ids:subIds,subscription_names:subNameMap})});
+    scanId=(await r.json()).scan_id;
+  } catch(e){showScanAlert('Failed to start scan: '+e.message);btn.disabled=false;btn.innerHTML='🔍 Analyze Policies';return;}
+  activeSSE=new EventSource(`/api/scan/stream/${scanId}`);
+  activeSSE.onmessage=e=>{try{handleScanEvent(JSON.parse(e.data));}catch{}};
+  activeSSE.onerror=()=>{if(activeSSE){activeSSE.close();activeSSE=null;}btn.disabled=false;btn.innerHTML='🔍 Analyze Policies';document.getElementById('scan-progress').classList.add('hidden');};
 }
 
 function handleScanEvent(msg) {
-  const btn = document.getElementById('scan-btn');
-  const msgEl = document.getElementById('scan-global-msg');
-
-  if (msg.type === 'start') {
-    msgEl.textContent = `Scanning 0 / ${msg.total} subscriptions...`;
-  } else if (msg.type === 'progress') {
-    msgEl.textContent = msg.msg || '';
-  } else if (msg.type === 'builtins') {
-    msgEl.textContent = `${msg.count} built-in policies loaded. Scanning subscriptions in parallel...`;
-  } else if (msg.type === 'result') {
-    const r = msg.data;
-    accResults.push(r);
-    const stats = r.custom_policies?.stats || {};
-    updateSubGrid(r.subscription_id, 'done',
-      `${stats.total||0} custom policies (${stats.errors||0} errors, ${stats.warnings||0} warnings)`);
-    msgEl.textContent = `Completed ${msg.completed} / ${msg.total} subscriptions...`;
+  const btn=document.getElementById('scan-btn'), msgEl=document.getElementById('scan-global-msg');
+  if(msg.type==='start') msgEl.textContent=`Scanning 0 / ${msg.total} subscriptions...`;
+  else if(msg.type==='progress') msgEl.textContent=msg.msg||'';
+  else if(msg.type==='builtins') msgEl.textContent=`${msg.count} built-in policies loaded (${msg.cache_source}). Scanning subscriptions in parallel...`;
+  else if(msg.type==='result') {
+    const r=msg.data; accResults.push(r);
+    const s=r.custom_policies?.stats||{};
+    updateSubGrid(r.subscription_id,'done',`${s.total||0} custom (${s.errors||0} err, ${s.warnings||0} warn)`);
+    msgEl.textContent=`Completed ${msg.completed} / ${msg.total} subscriptions...`;
     renderResults(accResults);
-  } else if (msg.type === 'error') {
-    const r = msg.data || {};
-    updateSubGrid(r.subscription_id || '', 'error', r.error || 'Scan failed');
-    msgEl.textContent = `Completed ${msg.completed} / ${msg.total} subscriptions...`;
-  } else if (msg.type === 'done') {
-    if (activeSSE) { activeSSE.close(); activeSSE = null; }
-    btn.disabled = false; btn.innerHTML = '🔍 Analyze Policies';
+    updateAgentContext(accResults);
+  } else if(msg.type==='error') {
+    updateSubGrid(msg.data?.subscription_id||'','error',msg.data?.error||'Scan failed');
+    msgEl.textContent=`Completed ${msg.completed} / ${msg.total} subscriptions...`;
+  } else if(msg.type==='done') {
+    if(activeSSE){activeSSE.close();activeSSE=null;}
+    btn.disabled=false; btn.innerHTML='🔍 Analyze Policies';
     document.getElementById('scan-progress').classList.add('hidden');
   }
 }
 
 function initSubGrid(subIds) {
-  document.getElementById('scan-sub-grid').innerHTML = subIds.map(id =>
-    `<div class="scan-sub-item scanning" id="ssi-${id}">
-      <span class="spin spin-dark" style="width:14px;height:14px;border-width:2px;flex-shrink:0"></span>
-      <span class="sub-stat-name">${esc(subNameMap[id] || id)}</span>
-    </div>`
-  ).join('');
+  document.getElementById('scan-sub-grid').innerHTML=subIds.map(id=>`<div class="scan-sub-item scanning" id="ssi-${id}"><span class="spin spin-dark" style="width:14px;height:14px;border-width:2px;flex-shrink:0"></span><span class="sub-stat-name">${esc(subNameMap[id]||id)}</span></div>`).join('');
 }
-
-function updateSubGrid(subId, state, detail) {
-  const el = document.getElementById('ssi-' + subId);
-  if (!el) return;
-  const icon = state === 'done' ? '✅' : '❌';
-  el.className = 'scan-sub-item ' + state;
-  el.innerHTML = `<span style="flex-shrink:0">${icon}</span><span class="sub-stat-name">${esc(subNameMap[subId]||subId)}</span><span class="sub-stat-detail">${esc(detail)}</span>`;
+function updateSubGrid(id,state,detail) {
+  const el=document.getElementById('ssi-'+id);
+  if(!el)return;
+  el.className='scan-sub-item '+state;
+  el.innerHTML=`<span style="flex-shrink:0">${state==='done'?'✅':'❌'}</span><span class="sub-stat-name">${esc(subNameMap[id]||id)}</span><span class="sub-stat-detail">${esc(detail)}</span>`;
 }
-
-function showScanAlert(msg) {
-  const el = document.getElementById('scan-alert');
-  el.innerHTML = `<div class="alert a-err">${esc(msg)}</div>`;
-  el.classList.remove('hidden');
-}
+function showScanAlert(msg){const el=document.getElementById('scan-alert');el.innerHTML=`<div class="alert a-err">${esc(msg)}</div>`;el.classList.remove('hidden');}
 
 // =====================================================================
-// Results rendering (same functions, called incrementally)
+// Results rendering
 // =====================================================================
 function renderResults(results) {
-  let totalComp=0, totalCustom=0, totalErr=0, totalWarn=0, totalOk=0, totalRecs=0;
-  results.forEach(r => {
-    totalComp += (r.compliance||[]).length;
-    const s = r.custom_policies?.stats || {};
-    totalCustom += s.total||0; totalErr += s.errors||0;
-    totalWarn += (s.warnings||0)+(s.info||0); totalOk += s.ok||0;
-    totalRecs += (r.recommendations||[]).length;
-  });
-
-  document.getElementById('stats').innerHTML = `
+  let totalComp=0,totalCustom=0,totalErr=0,totalWarn=0,totalOk=0,totalRecs=0;
+  results.forEach(r=>{totalComp+=(r.compliance||[]).length;const s=r.custom_policies?.stats||{};totalCustom+=s.total||0;totalErr+=s.errors||0;totalWarn+=(s.warnings||0)+(s.info||0);totalOk+=s.ok||0;totalRecs+=(r.recommendations||[]).length;});
+  document.getElementById('stats').innerHTML=`
     <div class="stat"><div class="stat-n n-err">${totalComp}</div><div class="stat-l">Non-Compliant Assignments</div></div>
     <div class="stat"><div class="stat-n n-blue">${totalCustom}</div><div class="stat-l">Custom Policies Total</div></div>
     <div class="stat s-err"><div class="stat-n n-err">${totalErr}</div><div class="stat-l">With Errors</div></div>
     <div class="stat s-warn"><div class="stat-n n-warn">${totalWarn}</div><div class="stat-l">With Warnings</div></div>
     <div class="stat s-ok"><div class="stat-n n-ok">${totalOk}</div><div class="stat-l">Healthy</div></div>
     <div class="stat"><div class="stat-n n-blue">${totalRecs}</div><div class="stat-l">Built-in Alternatives</div></div>`;
-
-  document.getElementById('tbadge-compliance').textContent = totalComp;
-  document.getElementById('tbadge-custom').textContent = totalErr + totalWarn;
-  document.getElementById('tbadge-recs').textContent = totalRecs;
-
-  renderCompliance(results);
-  renderCustom(results);
-  renderRecs(results);
-
+  document.getElementById('tbadge-compliance').textContent=totalComp;
+  document.getElementById('tbadge-custom').textContent=totalErr+totalWarn;
+  document.getElementById('tbadge-recs').textContent=totalRecs;
+  renderCompliance(results); renderCustom(results); renderRecs(results);
   document.getElementById('results').classList.remove('hidden');
-  if (results.length === 1) document.getElementById('results').scrollIntoView({behavior:'smooth'});
+  if(results.length===1)document.getElementById('results').scrollIntoView({behavior:'smooth'});
 }
-
 function renderCompliance(results) {
-  const el = document.getElementById('compliance-body');
-  let all = [];
-  results.forEach(r => (r.compliance||[]).forEach(c => all.push({...c, sub_name: r.subscription_name})));
-  if (!all.length) { el.innerHTML = '<div class="empty"><div class="empty-icon">✅</div><p>No non-compliant policy assignments found.</p></div>'; return; }
-  all.sort((a,b) => b.non_compliant_resources - a.non_compliant_resources);
-  let html = `<div class="tbl-wrap"><table><thead><tr><th>Policy Assignment</th><th>Subscription</th><th>Non-Compliant Resources</th><th>Policies Affected</th></tr></thead><tbody>`;
-  all.forEach(c => {
-    html += `<tr><td><strong>${esc(c.policy_assignment_name)}</strong><br><span class="muted" style="font-size:.72rem">${esc(c.policy_assignment_id||'')}</span></td>
-      <td>${esc(c.sub_name||'')}</td><td><span class="badge b-err">${c.non_compliant_resources}</span></td><td>${c.non_compliant_policies||0}</td></tr>`;
-  });
-  el.innerHTML = html + '</tbody></table></div>';
+  const el=document.getElementById('compliance-body');
+  let all=[];results.forEach(r=>(r.compliance||[]).forEach(c=>all.push({...c,sub_name:r.subscription_name})));
+  if(!all.length){el.innerHTML='<div class="empty"><div class="empty-icon">✅</div><p>No non-compliant policy assignments found.</p></div>';return;}
+  all.sort((a,b)=>b.non_compliant_resources-a.non_compliant_resources);
+  let h=`<div class="tbl-wrap"><table><thead><tr><th>Policy Assignment</th><th>Subscription</th><th>Non-Compliant Resources</th><th>Policies Affected</th></tr></thead><tbody>`;
+  all.forEach(c=>{h+=`<tr><td><strong>${esc(c.policy_assignment_name)}</strong><br><span class="muted" style="font-size:.72rem">${esc(c.policy_assignment_id||'')}</span></td><td>${esc(c.sub_name||'')}</td><td><span class="badge b-err">${c.non_compliant_resources}</span></td><td>${c.non_compliant_policies||0}</td></tr>`;});
+  el.innerHTML=h+'</tbody></table></div>';
 }
-
 function renderCustom(results) {
-  let allP = [];
-  results.forEach(r => (r.custom_policies?.all||[]).forEach(p => allP.push({...p, sub_name: r.subscription_name})));
-  renderCustomTable(allP);
-}
-
-function renderCustomTable(policies) {
-  const el = document.getElementById('custom-body');
-  if (!policies.length) { el.innerHTML = '<div class="empty"><div class="empty-icon">📋</div><p>No custom policies found.</p></div>'; return; }
-  const order = {error:0,warning:1,info:2,ok:3};
-  policies.sort((a,b) => (order[a.severity]||3)-(order[b.severity]||3));
-  let html = `<div class="tbl-wrap"><table id="custom-tbl"><thead><tr><th></th><th>Display Name</th><th>Category</th><th>Effect</th><th>Status</th><th>Issues</th><th>Subscription</th></tr></thead><tbody>`;
-  policies.forEach((p,i) => {
-    const bc = p.severity==='error'?'b-err':p.severity==='warning'?'b-warn':p.severity==='info'?'b-info':'b-ok';
-    const sl = p.severity==='ok'?'Healthy':p.severity.charAt(0).toUpperCase()+p.severity.slice(1);
-    const tot = (p.issue_count||0)+(p.warning_count||0);
-    const uid = 'row-'+i;
-    html += `<tr class="clickable" data-sev="${p.severity}" data-name="${esc((p.display_name||p.name||'').toLowerCase())}" onclick="toggleRow('${uid}',this)">
+  let all=[];results.forEach(r=>(r.custom_policies?.all||[]).forEach(p=>all.push({...p,sub_name:r.subscription_name})));
+  const el=document.getElementById('custom-body');
+  if(!all.length){el.innerHTML='<div class="empty"><div class="empty-icon">📋</div><p>No custom policies found.</p></div>';return;}
+  const order={error:0,warning:1,info:2,ok:3};all.sort((a,b)=>(order[a.severity]||3)-(order[b.severity]||3));
+  let h=`<div class="tbl-wrap"><table id="custom-tbl"><thead><tr><th></th><th>Display Name</th><th>Category</th><th>Effect</th><th>Status</th><th>Issues</th><th>Subscription</th></tr></thead><tbody>`;
+  all.forEach((p,i)=>{
+    const bc=p.severity==='error'?'b-err':p.severity==='warning'?'b-warn':p.severity==='info'?'b-info':'b-ok';
+    const sl=p.severity==='ok'?'Healthy':p.severity.charAt(0).toUpperCase()+p.severity.slice(1);
+    const tot=(p.issue_count||0)+(p.warning_count||0);const uid='row-'+i;
+    h+=`<tr class="clickable" data-sev="${p.severity}" data-name="${esc((p.display_name||p.name||'').toLowerCase())}" onclick="toggleRow('${uid}',this)">
       <td><span class="arr" id="arr-${uid}">&#9654;</span></td>
       <td><strong>${esc(p.display_name||p.name||'')}</strong><br><span class="muted" style="font-size:.72rem">${esc(p.name||'')}</span></td>
       <td>${p.category?`<span class="tag">${esc(p.category)}</span>`:'<span class="muted">-</span>'}</td>
@@ -526,113 +631,212 @@ function renderCustomTable(policies) {
     <tr class="exp-row" id="${uid}"><td colspan="7"><div class="detail-box">
       ${p.description?`<div class="detail-desc">${esc(p.description)}</div>`:''}
       ${renderIssues([...(p.issues||[]),...(p.warnings||[])])}
-      ${!tot?'<span style="color:#107c10;font-weight:600">✓ No issues detected</span>':''}
+      ${!tot?'<span style="color:#107c10;font-weight:600">No issues detected</span>':''}
     </div></td></tr>`;
   });
-  el.innerHTML = html + '</tbody></table></div>';
+  el.innerHTML=h+'</tbody></table></div>';
 }
-
 function renderIssues(issues) {
-  if (!issues.length) return '';
-  return '<div>' + issues.map(i => {
-    const icon = i.severity==='error'?'🔴':i.severity==='warning'?'🟡':'ℹ️';
-    return `<div class="issue-item"><span class="issue-icon">${icon}</span><div><div class="issue-msg">${esc(i.message||'')}</div>${i.fix?`<div class="issue-fix"><span class="fix-kw">Fix: </span>${esc(i.fix)}</div>`:''}</div></div>`;
-  }).join('') + '</div>';
+  if(!issues.length)return'';
+  return'<div>'+issues.map(i=>{const icon=i.severity==='error'?'🔴':i.severity==='warning'?'🟡':'ℹ️';return`<div class="issue-item"><span class="issue-icon">${icon}</span><div><div class="issue-msg">${esc(i.message||'')}</div>${i.fix?`<div class="issue-fix"><span class="fix-kw">Fix: </span>${esc(i.fix)}</div>`:''}</div></div>`;}).join('')+'</div>';
+}
+function renderRecs(results) {
+  const el=document.getElementById('recs-body');
+  let all=[];results.forEach(r=>(r.recommendations||[]).forEach(rec=>all.push({...rec,sub_name:r.subscription_name})));
+  if(!all.length){el.innerHTML='<div class="empty"><div class="empty-icon">💡</div><p>No built-in alternatives found.</p></div>';return;}
+  let h='';
+  all.forEach(rec=>{const c=rec.custom_policy||{};h+=`<div class="rec-card"><div class="rec-hdr"><div><div class="rec-custom-name">📝 ${esc(c.display_name||c.name||'')}</div><div style="margin-top:4px;display:flex;gap:6px">${c.category?`<span class="tag">${esc(c.category)}</span>`:''} ${c.effect?`<span class="tag">${esc(c.effect)}</span>`:''} ${(c.issue_count||0)+(c.warning_count||0)>0?`<span class="badge b-warn">${(c.issue_count||0)+(c.warning_count||0)} issue(s)</span>`:''}</div></div><span class="badge b-info">${(rec.matches||[]).length} alternative(s)</span></div><div class="rec-body">${(rec.matches||[]).map(m=>{const sc=m.match_score||0;return`<div class="match-item"><span class="match-score ${sc>=60?'hi':''}">${sc}%</span><div style="flex:1"><div class="match-name">${esc(m.display_name||m.name||'')}</div><div class="match-desc">${esc((m.description||'').substring(0,160))}${(m.description||'').length>160?'...':''}</div><div class="match-why">↳ ${esc(m.match_reason||'')}</div><div class="match-meta">${m.category?`<span class="tag">${esc(m.category)}</span>`:''} ${m.effect?`<span class="tag">${esc(m.effect)}</span>`:''} ${m.name?`<a class="portal-link" href="https://portal.azure.com/#view/Microsoft_Azure_Policy/PolicyDetailBlade/definitionId/%2Fproviders%2FMicrosoft.Authorization%2FpolicyDefinitions%2F${encodeURIComponent(m.name)}" target="_blank">View in Portal ↗</a>`:''}</div></div></div>`;}).join('')}</div></div>`;});
+  el.innerHTML=h;
 }
 
-function renderRecs(results) {
-  const el = document.getElementById('recs-body');
-  let all = [];
-  results.forEach(r => (r.recommendations||[]).forEach(rec => all.push({...rec, sub_name: r.subscription_name})));
-  if (!all.length) { el.innerHTML = '<div class="empty"><div class="empty-icon">💡</div><p>No built-in alternatives found, or no problematic custom policies detected.</p></div>'; return; }
-  let html = '';
-  all.forEach(rec => {
-    const c = rec.custom_policy || {};
-    html += `<div class="rec-card">
-      <div class="rec-hdr">
-        <div><div class="rec-custom-name">📝 ${esc(c.display_name||c.name||'')}</div>
-          <div style="margin-top:4px;display:flex;gap:6px">
-            ${c.category?`<span class="tag">${esc(c.category)}</span>`:''}
-            ${c.effect?`<span class="tag">${esc(c.effect)}</span>`:''}
-            ${(c.issue_count||0)+(c.warning_count||0)>0?`<span class="badge b-warn">${(c.issue_count||0)+(c.warning_count||0)} issue(s)</span>`:''}
-          </div>
-        </div>
-        <span class="badge b-info">${(rec.matches||[]).length} alternative(s)</span>
-      </div>
-      <div class="rec-body">
-        ${(rec.matches||[]).map(m => {
-          const sc = m.match_score||0;
-          return `<div class="match-item">
-            <span class="match-score ${sc>=60?'hi':''}">${sc}%</span>
-            <div style="flex:1">
-              <div class="match-name">${esc(m.display_name||m.name||'')}</div>
-              <div class="match-desc">${esc((m.description||'').substring(0,160))}${(m.description||'').length>160?'...':''}</div>
-              <div class="match-why">↳ ${esc(m.match_reason||'')}</div>
-              <div class="match-meta">
-                ${m.category?`<span class="tag">${esc(m.category)}</span>`:''}
-                ${m.effect?`<span class="tag">${esc(m.effect)}</span>`:''}
-                ${m.name?`<a class="portal-link" href="https://portal.azure.com/#view/Microsoft_Azure_Policy/PolicyDetailBlade/definitionId/%2Fproviders%2FMicrosoft.Authorization%2FpolicyDefinitions%2F${encodeURIComponent(m.name)}" target="_blank">View in Portal ↗</a>`:''}
-              </div>
-            </div>
-          </div>`;
-        }).join('')}
-      </div>
-    </div>`;
+// =====================================================================
+// Agent
+// =====================================================================
+function setApiType(t) {
+  agentApiType=t;
+  document.getElementById('type-openai').classList.toggle('active',t==='openai');
+  document.getElementById('type-azure').classList.toggle('active',t==='azure');
+  document.getElementById('azure-fields').classList.toggle('hidden',t!=='azure');
+}
+
+function updateAgentContext(results) {
+  let lines=[];
+  results.forEach(r=>{
+    const s=r.custom_policies?.stats||{};
+    lines.push(`${r.subscription_name}: ${s.total||0} custom policies (${s.errors||0} errors, ${s.warnings||0} warnings), ${(r.compliance||[]).length} non-compliant assignments`);
   });
-  el.innerHTML = html;
+  document.getElementById('agent-ctx-text').innerHTML=`<strong style="color:#107c10">Scan loaded</strong><br>`+lines.map(l=>`<span style="display:block;margin-top:4px">${esc(l)}</span>`).join('');
+}
+
+function chatKeyDown(e) {
+  if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();sendChat();}
+}
+
+async function sendChat() {
+  const input=document.getElementById('chat-input');
+  const text=input.value.trim();
+  if(!text)return;
+  const apiKey=document.getElementById('agent-api-key').value.trim();
+  if(!apiKey){appendChatMsg('system','Please enter your API key in the configuration panel.');return;}
+  input.value='';input.style.height='auto';
+  appendChatMsg('user',text);
+  chatHistory.push({role:'user',content:text});
+  const btn=document.getElementById('chat-send-btn');
+  btn.disabled=true;btn.innerHTML='<span class="spin"></span>';
+  appendChatMsg('assistant','<span class="spin spin-dark" style="width:14px;height:14px;border-width:2px;display:inline-block"></span> Thinking...',true);
+  try {
+    const r=await fetch('/api/agent/chat',{
+      method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({
+        messages:chatHistory,
+        api_key:apiKey,
+        api_type:agentApiType,
+        azure_endpoint:document.getElementById('agent-endpoint').value.trim(),
+        azure_deployment:document.getElementById('agent-deployment').value.trim(),
+      })
+    });
+    const d=await r.json();
+    removeLastThinking();
+    if(d.status!=='ok')throw new Error(d.message||'Agent error');
+    appendChatMsg('assistant',d.content,false,true);
+    chatHistory.push({role:'assistant',content:d.content});
+    // Render policy JSONs
+    if(d.policy_jsons?.length) {
+      d.policy_jsons.forEach(j=>renderPolicyJson(j));
+    }
+    // Show confirmation modals sequentially
+    if(d.confirmations?.length) {
+      showConfirmation(d.confirmations[0]);
+    }
+  } catch(e) {
+    removeLastThinking();
+    appendChatMsg('system',`Error: ${esc(e.message)}`);
+  } finally { btn.disabled=false;btn.innerHTML='Send'; }
+}
+
+function appendChatMsg(role,content,isThinking=false,isMarkdown=false) {
+  const msgs=document.getElementById('chat-messages');
+  const div=document.createElement('div');
+  div.className='chat-msg '+role;
+  if(isThinking)div.dataset.thinking='1';
+  if(isMarkdown&&role==='assistant') {
+    const md=document.createElement('div');
+    md.className='markdown-body';
+    md.innerHTML=marked.parse(content||'');
+    div.appendChild(md);
+  } else {
+    div.innerHTML=content;
+  }
+  msgs.appendChild(div);
+  msgs.scrollTop=msgs.scrollHeight;
+}
+
+function removeLastThinking() {
+  const el=document.querySelector('#chat-messages [data-thinking="1"]');
+  if(el)el.remove();
+}
+
+function renderPolicyJson(policy) {
+  const container=document.getElementById('chat-jsons');
+  const id='json-'+Date.now();
+  const jsonStr=JSON.stringify(policy,null,2);
+  const div=document.createElement('div');
+  div.className='json-card';
+  div.innerHTML=`<div class="json-card-hdr"><span class="json-card-title">📄 ${esc(policy.name||'policy.json')}</span><button class="json-copy-btn" onclick="copyJson('${id}')">Copy JSON</button></div><pre class="json-body" id="${id}">${esc(jsonStr)}</pre>`;
+  container.appendChild(div);
+  document.getElementById('chat-messages').scrollTop=9999;
+}
+
+function copyJson(id) {
+  const text=document.getElementById(id).textContent;
+  navigator.clipboard.writeText(text).then(()=>{
+    const btn=document.querySelector(`#${id}`).previousElementSibling.querySelector('.json-copy-btn');
+    const orig=btn.textContent;btn.textContent='Copied!';setTimeout(()=>{btn.textContent=orig;},1500);
+  });
+}
+
+// =====================================================================
+// Confirmation modal
+// =====================================================================
+function showConfirmation(conf) {
+  pendingAction=conf;
+  const level=conf.danger_level||'WARNING';
+  const hdr=document.getElementById('modal-hdr');
+  hdr.className='modal-hdr '+level.toLowerCase();
+  document.getElementById('modal-icon').textContent=level==='DANGER'?'🔴':level==='WARNING'?'⚠️':'✅';
+  document.getElementById('modal-title-text').textContent=
+    conf.action_type==='assign_policy'?'Assign Policy':
+    conf.action_type==='create_custom_policy'?'Create Custom Policy':
+    conf.action_type==='remediate'?'Trigger Remediation':'Confirm Action';
+  const pill=document.getElementById('modal-danger-pill');
+  pill.className=level==='DANGER'?'b-danger-pill':level==='WARNING'?'b-warning-pill':'b-safe-pill';
+  pill.textContent=level;
+  document.getElementById('modal-explanation').textContent=conf.explanation||'';
+  document.getElementById('modal-what').textContent=conf.what_will_happen||'';
+  const rlist=document.getElementById('modal-reasons');
+  rlist.innerHTML=(conf.danger_reasons||[]).map(r=>`<li>${esc(r)}</li>`).join('');
+  const dangerCheck=document.getElementById('modal-danger-confirm');
+  if(level==='DANGER') {
+    dangerCheck.classList.remove('hidden');
+    document.getElementById('danger-ack').checked=false;
+    document.getElementById('modal-confirm-btn').disabled=true;
+  } else {
+    dangerCheck.classList.add('hidden');
+    document.getElementById('modal-confirm-btn').disabled=false;
+  }
+  const confirmBtn=document.getElementById('modal-confirm-btn');
+  confirmBtn.className='btn '+(level==='DANGER'?'btn-danger':level==='WARNING'?'btn-warn':'btn-primary');
+  document.getElementById('confirm-modal').classList.remove('hidden');
+}
+
+function updateConfirmBtn() {
+  document.getElementById('modal-confirm-btn').disabled=!document.getElementById('danger-ack').checked;
+}
+
+function closeModal() {
+  document.getElementById('confirm-modal').classList.add('hidden');
+  appendChatMsg('system','Action cancelled.');
+  pendingAction=null;
+}
+
+async function executeAction() {
+  if(!pendingAction)return;
+  const conf=pendingAction;
+  document.getElementById('confirm-modal').classList.add('hidden');
+  pendingAction=null;
+  appendChatMsg('system','Executing action...');
+  const tenantId=document.getElementById('tenant-id').value.trim();
+  const subId=[...document.querySelectorAll('.sub-chk:checked')].map(c=>c.value)[0]||'';
+  try {
+    const r=await fetch('/api/agent/execute',{
+      method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({
+        action_type:conf.action_type,
+        action_params:conf.action_params,
+        tenant_id:tenantId,
+        subscription_id:subId,
+      })
+    });
+    const d=await r.json();
+    if(d.status!=='ok')throw new Error(d.message||'Execution failed');
+    const res=d.result||{};
+    appendChatMsg('assistant',`**Action completed successfully!**\n\nResult: \`${JSON.stringify(res)}\``,false,true);
+    chatHistory.push({role:'assistant',content:`Action ${conf.action_type} executed successfully. Result: ${JSON.stringify(res)}`});
+  } catch(e) {
+    appendChatMsg('system',`Action failed: ${esc(e.message)}`);
+  }
 }
 
 // =====================================================================
 // UI helpers
 // =====================================================================
-function filterCustom(sev, btn) {
-  document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
-  btn.classList.add('active');
-  applyCustomFilter(sev, document.getElementById('custom-search').value.toLowerCase());
-}
-
-function searchCustom(val) {
-  const activeSev = [...document.querySelectorAll('.filter-btn')].find(b => b.classList.contains('active'));
-  const match = activeSev?.textContent?.match(/\b(all|error|warning|ok)\b/i);
-  applyCustomFilter(match ? match[1].toLowerCase() : 'all', val.toLowerCase());
-}
-
-function applyCustomFilter(sev, search) {
-  document.querySelectorAll('#custom-tbl tbody tr.clickable').forEach(row => {
-    const rs = row.dataset.sev || '';
-    const rn = row.dataset.name || '';
-    const sevOk = sev==='all' || rs===sev || (sev==='warning' && (rs==='warning'||rs==='info'));
-    const srchOk = !search || rn.includes(search) || row.textContent.toLowerCase().includes(search);
-    const show = sevOk && srchOk;
-    row.style.display = show ? '' : 'none';
-    const uid = row.querySelector('.arr')?.id?.replace('arr-', '');
-    if (uid) { const ex = document.getElementById(uid); if (ex) ex.style.display = show ? '' : 'none'; }
-  });
-}
-
-function showTab(name) {
-  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
-  document.querySelectorAll('.tc').forEach(t => t.classList.remove('active'));
-  document.getElementById('tab-btn-'+name)?.classList.add('active');
-  document.getElementById('tc-'+name)?.classList.add('active');
-}
-
-function toggleRow(uid, row) {
-  const exp = document.getElementById(uid);
-  const arr = document.getElementById('arr-'+uid);
-  const open = exp.classList.contains('open');
-  exp.classList.toggle('open', !open);
-  arr.classList.toggle('open', !open);
-}
-
-function setStatus(state, msg) {
-  document.getElementById('status-dot').className = 'status-dot' + (state==='ok'?' ok':'');
-  document.getElementById('status-text').textContent = msg;
-}
-
-function esc(s) {
-  return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
-}
+function filterCustom(sev,btn){document.querySelectorAll('.filter-btn').forEach(b=>b.classList.remove('active'));btn.classList.add('active');applyCustomFilter(sev,document.getElementById('custom-search').value.toLowerCase());}
+function searchCustom(val){const ab=[...document.querySelectorAll('.filter-btn')].find(b=>b.classList.contains('active'));const m=ab?.textContent?.match(/\b(all|error|warning|ok)\b/i);applyCustomFilter(m?m[1].toLowerCase():'all',val.toLowerCase());}
+function applyCustomFilter(sev,search){document.querySelectorAll('#custom-tbl tbody tr.clickable').forEach(row=>{const rs=row.dataset.sev||'',rn=row.dataset.name||'';const sevOk=sev==='all'||rs===sev||(sev==='warning'&&(rs==='warning'||rs==='info'));const srchOk=!search||rn.includes(search)||row.textContent.toLowerCase().includes(search);const show=sevOk&&srchOk;row.style.display=show?'':'none';const uid=row.querySelector('.arr')?.id?.replace('arr-','');if(uid){const ex=document.getElementById(uid);if(ex)ex.style.display=show?'':'none';}});}
+function showTab(name){document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));document.querySelectorAll('.tc').forEach(t=>t.classList.remove('active'));document.getElementById('tab-btn-'+name)?.classList.add('active');document.getElementById('tc-'+name)?.classList.add('active');}
+function toggleRow(uid,row){const exp=document.getElementById(uid),arr=document.getElementById('arr-'+uid),open=exp.classList.contains('open');exp.classList.toggle('open',!open);arr.classList.toggle('open',!open);}
+function setStatus(state,msg){document.getElementById('status-dot').className='status-dot'+(state==='ok'?' ok':'');document.getElementById('status-text').textContent=msg;}
+function esc(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
 </script>
 </body>
 </html>
