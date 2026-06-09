@@ -409,19 +409,12 @@ function renderInsights(results) {
 // =====================================================================
 function renderDashboard(results) {
   // Aggregate overview across subscriptions
-  let polCompliant=0, polNonCompliant=0, polError=0;
-  let resCompliant=0, resNonCompliant=0;
   let pendingRem=0;
   let allCompliance=[];
   let allRecommended=[];
 
   results.forEach(r => {
     const ov = r.compliance_overview || {};
-    polCompliant += ov.policy_compliant || 0;
-    polNonCompliant += ov.policy_non_compliant || 0;
-    polError += ov.policy_error || 0;
-    resCompliant += ov.resource_compliant || 0;
-    resNonCompliant += ov.resource_non_compliant || 0;
     pendingRem += ov.pending_remediation || 0;
     allCompliance.push(...(r.compliance||[]));
     (r.recommended_assignments||[]).forEach(ra => {
@@ -429,41 +422,55 @@ function renderDashboard(results) {
     });
   });
 
-  // Donut: Policy Compliance
-  const polTotal = polCompliant + polNonCompliant + polError;
+  // Aggregate overview across subscriptions
+  let polCompliantAgg=0, polNonCompliantAgg=0, polErrorAgg=0, polOtherAgg=0;
+  let iniCompliantAgg=0, iniNonCompliantAgg=0;
+  let resNonCompliantAgg=0;
+
+  results.forEach(r => {
+    const ov = r.compliance_overview || {};
+    polCompliantAgg    += ov.policy_compliant || 0;
+    polNonCompliantAgg += ov.policy_non_compliant || 0;
+    polErrorAgg        += ov.policy_error || 0;
+    polOtherAgg        += ov.policy_other || 0;
+    iniCompliantAgg    += ov.initiative_compliant || 0;
+    iniNonCompliantAgg += ov.initiative_non_compliant || 0;
+    resNonCompliantAgg += ov.resource_non_compliant || 0;
+  });
+
+  // Donut: Policy Compliance (matches portal)
+  const polTotal = polCompliantAgg + polNonCompliantAgg + polErrorAgg + polOtherAgg;
   drawDonut('donut-policy', [
-    {value: polCompliant, color: '#107c10'},
-    {value: polNonCompliant, color: '#d13438'},
-    {value: polError, color: '#f7c300'},
+    {value: polCompliantAgg, color: '#107c10'},
+    {value: polNonCompliantAgg, color: '#d13438'},
+    {value: polErrorAgg, color: '#f7c300'},
+    {value: polOtherAgg, color: '#c8c6c4'},
   ], polTotal);
-  document.getElementById('legend-policy').innerHTML = `
-    <span style="color:#107c10">■</span> ${polCompliant} - Compliant<br>
-    <span style="color:#d13438">■</span> ${polNonCompliant} - Non-compliant<br>
-    ${polError>0?`<span style="color:#f7c300">■</span> ${polError} - Error<br>`:''}`;
+  document.getElementById('legend-policy').innerHTML =
+    `<span style="color:#107c10">■</span> ${polCompliantAgg} - Compliant<br>` +
+    `<span style="color:#d13438">■</span> ${polNonCompliantAgg} - Non-compliant<br>` +
+    (polErrorAgg>0?`<span style="color:#f7c300">■</span> ${polErrorAgg} - Error<br>`:'') +
+    (polOtherAgg>0?`<span style="color:#c8c6c4">■</span> ${polOtherAgg} - Other<br>`:'');
 
-  // Donut: Initiative (placeholder from custom policies data)
-  const ini = results[0]?.custom_policies?.stats || {};
-  const iniCompliant = ini.ok||0, iniNonCompliant = (ini.errors||0)+(ini.warnings||0);
-  const iniTotal = iniCompliant + iniNonCompliant;
+  // Donut: Initiative Compliance (from API initiative counts)
+  const iniTotal = iniCompliantAgg + iniNonCompliantAgg;
   drawDonut('donut-initiative', [
-    {value: iniCompliant, color: '#107c10'},
-    {value: iniNonCompliant, color: '#d13438'},
-  ], iniTotal);
-  document.getElementById('legend-initiative').innerHTML = `
-    <span style="color:#107c10">■</span> ${iniCompliant} - Healthy<br>
-    <span style="color:#d13438">■</span> ${iniNonCompliant} - Issues<br>`;
+    {value: iniCompliantAgg, color: '#107c10'},
+    {value: iniNonCompliantAgg, color: '#d13438'},
+  ], iniTotal || 1);
+  document.getElementById('legend-initiative').innerHTML =
+    `<span style="color:#107c10">■</span> ${iniCompliantAgg} - Compliant<br>` +
+    `<span style="color:#d13438">■</span> ${iniNonCompliantAgg} - Non-compliant<br>`;
 
-  // Resource compliance
-  const resTotal = resCompliant + resNonCompliant;
-  const resPct = resTotal > 0 ? Math.round(100 * resCompliant / resTotal) : null;
+  // Resource compliance: sum non-compliant from compliance list
+  const totalNonCompliantRes = allCompliance.reduce((s,c) => s+(c.non_compliant_resources||0), 0);
   const pctEl = document.getElementById('resource-pct');
   const barEl = document.getElementById('resource-bar');
   const lblEl = document.getElementById('resource-label');
-  pctEl.textContent = resPct !== null ? resPct + '%' : '--';
-  pctEl.style.color = resPct !== null ? (resPct >= 70 ? '#107c10' : resPct >= 40 ? '#7a4100' : '#d13438') : '#1f1f1f';
-  barEl.style.width = (resPct||0) + '%';
-  barEl.style.background = resPct !== null ? (resPct >= 70 ? '#107c10' : resPct >= 40 ? '#f7c300' : '#d13438') : '#edebe9';
-  lblEl.textContent = resTotal > 0 ? `${resCompliant} out of ${resTotal} resources` : 'No resource data';
+  pctEl.textContent = '--';
+  pctEl.style.color = '#d13438';
+  barEl.style.width = '0%';
+  lblEl.textContent = totalNonCompliantRes > 0 ? `${totalNonCompliantRes} non-compliant resources detected` : 'No non-compliant resources';
 
   // Portal link for overall
   if (results[0]?.subscription_id) {
@@ -2688,19 +2695,12 @@ function renderInsights(results) {
 // =====================================================================
 function renderDashboard(results) {
   // Aggregate overview across subscriptions
-  let polCompliant=0, polNonCompliant=0, polError=0;
-  let resCompliant=0, resNonCompliant=0;
   let pendingRem=0;
   let allCompliance=[];
   let allRecommended=[];
 
   results.forEach(r => {
     const ov = r.compliance_overview || {};
-    polCompliant += ov.policy_compliant || 0;
-    polNonCompliant += ov.policy_non_compliant || 0;
-    polError += ov.policy_error || 0;
-    resCompliant += ov.resource_compliant || 0;
-    resNonCompliant += ov.resource_non_compliant || 0;
     pendingRem += ov.pending_remediation || 0;
     allCompliance.push(...(r.compliance||[]));
     (r.recommended_assignments||[]).forEach(ra => {
@@ -2708,41 +2708,55 @@ function renderDashboard(results) {
     });
   });
 
-  // Donut: Policy Compliance
-  const polTotal = polCompliant + polNonCompliant + polError;
+  // Aggregate overview across subscriptions
+  let polCompliantAgg=0, polNonCompliantAgg=0, polErrorAgg=0, polOtherAgg=0;
+  let iniCompliantAgg=0, iniNonCompliantAgg=0;
+  let resNonCompliantAgg=0;
+
+  results.forEach(r => {
+    const ov = r.compliance_overview || {};
+    polCompliantAgg    += ov.policy_compliant || 0;
+    polNonCompliantAgg += ov.policy_non_compliant || 0;
+    polErrorAgg        += ov.policy_error || 0;
+    polOtherAgg        += ov.policy_other || 0;
+    iniCompliantAgg    += ov.initiative_compliant || 0;
+    iniNonCompliantAgg += ov.initiative_non_compliant || 0;
+    resNonCompliantAgg += ov.resource_non_compliant || 0;
+  });
+
+  // Donut: Policy Compliance (matches portal)
+  const polTotal = polCompliantAgg + polNonCompliantAgg + polErrorAgg + polOtherAgg;
   drawDonut('donut-policy', [
-    {value: polCompliant, color: '#107c10'},
-    {value: polNonCompliant, color: '#d13438'},
-    {value: polError, color: '#f7c300'},
+    {value: polCompliantAgg, color: '#107c10'},
+    {value: polNonCompliantAgg, color: '#d13438'},
+    {value: polErrorAgg, color: '#f7c300'},
+    {value: polOtherAgg, color: '#c8c6c4'},
   ], polTotal);
-  document.getElementById('legend-policy').innerHTML = `
-    <span style="color:#107c10">■</span> ${polCompliant} - Compliant<br>
-    <span style="color:#d13438">■</span> ${polNonCompliant} - Non-compliant<br>
-    ${polError>0?`<span style="color:#f7c300">■</span> ${polError} - Error<br>`:''}`;
+  document.getElementById('legend-policy').innerHTML =
+    `<span style="color:#107c10">■</span> ${polCompliantAgg} - Compliant<br>` +
+    `<span style="color:#d13438">■</span> ${polNonCompliantAgg} - Non-compliant<br>` +
+    (polErrorAgg>0?`<span style="color:#f7c300">■</span> ${polErrorAgg} - Error<br>`:'') +
+    (polOtherAgg>0?`<span style="color:#c8c6c4">■</span> ${polOtherAgg} - Other<br>`:'');
 
-  // Donut: Initiative (placeholder from custom policies data)
-  const ini = results[0]?.custom_policies?.stats || {};
-  const iniCompliant = ini.ok||0, iniNonCompliant = (ini.errors||0)+(ini.warnings||0);
-  const iniTotal = iniCompliant + iniNonCompliant;
+  // Donut: Initiative Compliance (from API initiative counts)
+  const iniTotal = iniCompliantAgg + iniNonCompliantAgg;
   drawDonut('donut-initiative', [
-    {value: iniCompliant, color: '#107c10'},
-    {value: iniNonCompliant, color: '#d13438'},
-  ], iniTotal);
-  document.getElementById('legend-initiative').innerHTML = `
-    <span style="color:#107c10">■</span> ${iniCompliant} - Healthy<br>
-    <span style="color:#d13438">■</span> ${iniNonCompliant} - Issues<br>`;
+    {value: iniCompliantAgg, color: '#107c10'},
+    {value: iniNonCompliantAgg, color: '#d13438'},
+  ], iniTotal || 1);
+  document.getElementById('legend-initiative').innerHTML =
+    `<span style="color:#107c10">■</span> ${iniCompliantAgg} - Compliant<br>` +
+    `<span style="color:#d13438">■</span> ${iniNonCompliantAgg} - Non-compliant<br>`;
 
-  // Resource compliance
-  const resTotal = resCompliant + resNonCompliant;
-  const resPct = resTotal > 0 ? Math.round(100 * resCompliant / resTotal) : null;
+  // Resource compliance: sum non-compliant from compliance list
+  const totalNonCompliantRes = allCompliance.reduce((s,c) => s+(c.non_compliant_resources||0), 0);
   const pctEl = document.getElementById('resource-pct');
   const barEl = document.getElementById('resource-bar');
   const lblEl = document.getElementById('resource-label');
-  pctEl.textContent = resPct !== null ? resPct + '%' : '--';
-  pctEl.style.color = resPct !== null ? (resPct >= 70 ? '#107c10' : resPct >= 40 ? '#7a4100' : '#d13438') : '#1f1f1f';
-  barEl.style.width = (resPct||0) + '%';
-  barEl.style.background = resPct !== null ? (resPct >= 70 ? '#107c10' : resPct >= 40 ? '#f7c300' : '#d13438') : '#edebe9';
-  lblEl.textContent = resTotal > 0 ? `${resCompliant} out of ${resTotal} resources` : 'No resource data';
+  pctEl.textContent = '--';
+  pctEl.style.color = '#d13438';
+  barEl.style.width = '0%';
+  lblEl.textContent = totalNonCompliantRes > 0 ? `${totalNonCompliantRes} non-compliant resources detected` : 'No non-compliant resources';
 
   // Portal link for overall
   if (results[0]?.subscription_id) {
