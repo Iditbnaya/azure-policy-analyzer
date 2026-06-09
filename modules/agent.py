@@ -265,11 +265,24 @@ def chat(messages: list, api_key: str = None, api_type: str = "openai",
     try:
         if api_type in ("azure", "azure-credential"):
             from openai import AzureOpenAI
-            if api_type == "azure-credential" and credential:
-                from azure.identity import get_bearer_token_provider
-                token_provider = get_bearer_token_provider(
-                    credential, "https://cognitiveservices.azure.com/.default"
-                )
+            if api_type == "azure-credential":
+                # Prefer AzureCliCredential - it uses the already-authenticated CLI session
+                # which has the correct tenant context for the OpenAI resource.
+                # Fall back to the passed credential if CLI is not available.
+                try:
+                    from azure.identity import AzureCliCredential, get_bearer_token_provider
+                    cli_cred = AzureCliCredential()
+                    token_provider = get_bearer_token_provider(
+                        cli_cred, "https://cognitiveservices.azure.com/.default"
+                    )
+                except Exception:
+                    if credential:
+                        from azure.identity import get_bearer_token_provider
+                        token_provider = get_bearer_token_provider(
+                            credential, "https://cognitiveservices.azure.com/.default"
+                        )
+                    else:
+                        raise
                 client = AzureOpenAI(
                     azure_endpoint=azure_endpoint,
                     azure_ad_token_provider=token_provider,
