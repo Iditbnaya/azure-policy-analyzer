@@ -781,6 +781,22 @@ async function triggerRemediation() {
   } catch(e) { alert('Error: ' + e.message); }
 }
 
+
+function stopScan() {
+  if (activeSSE) { activeSSE.close(); activeSSE = null; }
+  const btn = document.getElementById('scan-btn');
+  btn.disabled = false;
+  btn.innerHTML = '🔍 Analyze Policies';
+  document.getElementById('stop-btn').classList.add('hidden');
+  document.getElementById('scan-progress').classList.add('hidden');
+  // Show partial results if any came in
+  if (accResults.length > 0) {
+    renderResults(accResults);
+    const msgEl = document.getElementById('scan-global-msg');
+    if (msgEl) msgEl.textContent = 'Scan stopped - showing partial results';
+  }
+}
+
 </script>
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
@@ -998,6 +1014,7 @@ tr.clickable{cursor:pointer}tr.clickable:hover td{background:#faf9f8}
         </div>
         <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
           <button class="btn btn-primary" id="scan-btn" onclick="startScan()">🔍 Analyze Policies</button>
+          <button class="btn hidden" id="stop-btn" style="background:#a4262c;color:#fff" onclick="stopScan()">⏹ Stop Scan</button>
         </div>
         <div id="scan-progress" class="hidden" style="margin-top:16px">
           <div style="display:flex;align-items:center;gap:8px">
@@ -1595,6 +1612,7 @@ async function startScan() {
   selected.forEach(s=>{subNameMap[s.id]=s.name;});
   const btn=document.getElementById('scan-btn');
   btn.disabled=true; btn.innerHTML='<span class="spin"></span> Scanning...';
+  document.getElementById('stop-btn').classList.remove('hidden');
   accResults=[];
   initSubGrid(subIds);
   document.getElementById('scan-progress').classList.remove('hidden');
@@ -1607,7 +1625,7 @@ async function startScan() {
   } catch(e){showScanAlert('Failed to start scan: '+e.message);btn.disabled=false;btn.innerHTML='🔍 Analyze Policies';return;}
   activeSSE=new EventSource(`/api/scan/stream/${scanId}`);
   activeSSE.onmessage=e=>{try{handleScanEvent(JSON.parse(e.data));}catch{}};
-  activeSSE.onerror=()=>{if(activeSSE){activeSSE.close();activeSSE=null;}btn.disabled=false;btn.innerHTML='🔍 Analyze Policies';document.getElementById('scan-progress').classList.add('hidden');};
+  activeSSE.onerror=()=>{if(activeSSE){activeSSE.close();activeSSE=null;}btn.disabled=false;btn.innerHTML='🔍 Analyze Policies';document.getElementById('stop-btn').classList.add('hidden');document.getElementById('scan-progress').classList.add('hidden');};
 }
 
 function handleScanEvent(msg) {
@@ -1628,6 +1646,7 @@ function handleScanEvent(msg) {
   } else if(msg.type==='done') {
     if(activeSSE){activeSSE.close();activeSSE=null;}
     btn.disabled=false; btn.innerHTML='🔍 Analyze Policies';
+    document.getElementById('stop-btn').classList.add('hidden');
     document.getElementById('scan-progress').classList.add('hidden');
   }
 }
@@ -2936,6 +2955,22 @@ async function triggerRemediation() {
       alert('Failed: ' + (d.message||'Unknown error'));
     }
   } catch(e) { alert('Error: ' + e.message); }
+}
+
+
+function stopScan() {
+  if (activeSSE) { activeSSE.close(); activeSSE = null; }
+  const btn = document.getElementById('scan-btn');
+  btn.disabled = false;
+  btn.innerHTML = '🔍 Analyze Policies';
+  document.getElementById('stop-btn').classList.add('hidden');
+  document.getElementById('scan-progress').classList.add('hidden');
+  // Show partial results if any came in
+  if (accResults.length > 0) {
+    renderResults(accResults);
+    const msgEl = document.getElementById('scan-global-msg');
+    if (msgEl) msgEl.textContent = 'Scan stopped - showing partial results';
+  }
 }
 
 </script>
