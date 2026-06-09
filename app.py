@@ -350,15 +350,29 @@ def autofix_preview():
         # Map: try exact name match first, then fuzzy (lowercase contains)
         mapped_params = {}
         unmapped_builtin = []
+        def _param_meta(bp_def):
+            if not isinstance(bp_def, dict):
+                return {"type": "String", "allowed": None, "default": None, "description": ""}
+            allowed = bp_def.get("allowedValues")
+            default = bp_def.get("defaultValue")
+            description = (bp_def.get("metadata") or {}).get("description", "")
+            display_name = (bp_def.get("metadata") or {}).get("displayName", "")
+            return {
+                "type": bp_def.get("type", "String"),
+                "allowed": allowed,
+                "default": default,
+                "description": description or display_name,
+            }
+
         for bp_name, bp_def in builtin_params_def.items():
+            meta = _param_meta(bp_def)
             if bp_name in existing_params:
                 mapped_params[bp_name] = {
                     "value": existing_params[bp_name].get("value"),
                     "source": "exact_match",
-                    "type": bp_def.get("type", "String") if isinstance(bp_def, dict) else "String",
+                    **meta,
                 }
             else:
-                # Fuzzy: find a custom param whose name contains bp_name or vice versa
                 fuzzy = next(
                     (k for k in existing_params
                      if bp_name.lower() in k.lower() or k.lower() in bp_name.lower()),
@@ -368,22 +382,19 @@ def autofix_preview():
                     mapped_params[bp_name] = {
                         "value": existing_params[fuzzy].get("value"),
                         "source": f"fuzzy_match:{fuzzy}",
-                        "type": bp_def.get("type", "String") if isinstance(bp_def, dict) else "String",
+                        **meta,
+                    }
+                elif meta["default"] is not None:
+                    mapped_params[bp_name] = {
+                        "value": meta["default"],
+                        "source": "default",
+                        **meta,
                     }
                 else:
-                    default = bp_def.get("defaultValue") if isinstance(bp_def, dict) else None
-                    if default is not None:
-                        mapped_params[bp_name] = {
-                            "value": default,
-                            "source": "default",
-                            "type": bp_def.get("type", "String") if isinstance(bp_def, dict) else "String",
-                        }
-                    else:
-                        unmapped_builtin.append({
-                            "name": bp_name,
-                            "type": bp_def.get("type", "String") if isinstance(bp_def, dict) else "String",
-                            "description": (bp_def.get("metadata", {}) or {}).get("description", "") if isinstance(bp_def, dict) else "",
-                        })
+                    unmapped_builtin.append({
+                        "name": bp_name,
+                        **meta,
+                    })
 
         # Proposed new assignment
         proposed_scope = custom_assignment.get("scope") or f"/subscriptions/{subscription_id}"

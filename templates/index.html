@@ -10,6 +10,51 @@
 // =====================================================================
 let autofixState = {};
 
+
+// Build the right input control for a policy parameter
+function buildParamInput(name, value, info, isMissing=false) {
+  const type = (info.type||'String').toLowerCase();
+  const allowed = info.allowed;
+  const borderStyle = isMissing ? 'border-color:#f1707b;' : '';
+
+  // Dropdown if allowedValues defined
+  if (allowed && Array.isArray(allowed) && allowed.length > 0) {
+    const opts = allowed.map(v => {
+      const vStr = typeof v === 'object' ? JSON.stringify(v) : String(v);
+      const selected = value !== null && value !== undefined && String(value) === vStr ? 'selected' : '';
+      return `<option value="${esc(vStr)}" ${selected}>${esc(vStr)}</option>`;
+    }).join('');
+    const placeholder = isMissing ? `<option value="" selected>-- select --</option>` : '';
+    return `<select class="param-input af-param inp" data-name="${esc(name)}" style="${borderStyle}font-size:.82rem">${placeholder}${opts}</select>`;
+  }
+
+  // Boolean toggle
+  if (type === 'boolean') {
+    const checked = value === true || value === 'true' ? 'checked' : '';
+    return `<label style="display:flex;align-items:center;gap:8px;font-size:.84rem">
+      <input type="checkbox" class="af-param-bool" data-name="${esc(name)}" ${checked} style="width:16px;height:16px">
+      <span id="bool-label-${esc(name)}">${checked ? 'true' : 'false'}</span>
+    </label>`;
+  }
+
+  // Array - comma separated
+  if (type === 'array') {
+    const arrVal = Array.isArray(value) ? value.join(', ') : (value || '');
+    return `<input class="param-input af-param inp" data-name="${esc(name)}" data-type="array"
+      value="${esc(String(arrVal))}"
+      placeholder="value1, value2, ..."
+      title="Enter comma-separated values"
+      style="${borderStyle}font-size:.82rem">`;
+  }
+
+  // Default: text input
+  const strVal = value !== null && value !== undefined ? String(value) : '';
+  return `<input class="param-input af-param inp" data-name="${esc(name)}"
+    value="${esc(strVal)}"
+    placeholder="${isMissing ? 'Enter value...' : ''}"
+    style="${borderStyle}font-size:.82rem">`;
+}
+
 async function startAutoFix(btn, escapedJson) {
   const ctx = JSON.parse(unesc(escapedJson));
   btn.disabled = true;
@@ -56,10 +101,13 @@ async function startAutoFix(btn, escapedJson) {
       const srcLabel = info.source==='exact_match'?`<span class="param-src-exact">✓ exact match</span>`:
         info.source.startsWith('fuzzy')?`<span class="param-src-fuzzy">~ fuzzy: ${esc(info.source.split(':')[1])}</span>`:
         `<span class="param-src-default">default</span>`;
-      const val = info.value !== null && info.value !== undefined ? JSON.stringify(info.value) : '';
       tbody.innerHTML += `<tr>
-        <td><strong>${esc(name)}</strong><br><span class="muted" style="font-size:.72rem">${esc(info.type)}</span></td>
-        <td><input class="param-input af-param" data-name="${esc(name)}" value="${esc(val.replace(/^"|"$/g,''))}"></td>
+        <td>
+          <strong>${esc(name)}</strong>
+          <br><span class="muted" style="font-size:.72rem">${esc(info.type||'String')}</span>
+          ${info.description?`<br><span class="muted" style="font-size:.7rem">${esc(info.description)}</span>`:''}
+        </td>
+        <td>${buildParamInput(name, info.value, info)}</td>
         <td>${srcLabel}</td>
       </tr>`;
     });
@@ -69,8 +117,12 @@ async function startAutoFix(btn, escapedJson) {
     if (unmapped.length) {
       unmapped.forEach(p => {
         tbody.innerHTML += `<tr>
-          <td><strong>${esc(p.name)}</strong><br><span class="param-src-missing">⚠ required - no value found</span></td>
-          <td><input class="param-input af-param" data-name="${esc(p.name)}" placeholder="Enter value..." style="border-color:#f1707b"></td>
+          <td>
+            <strong>${esc(p.name)}</strong>
+            <br><span class="param-src-missing">⚠ required - no value found</span>
+            ${p.description?`<br><span class="muted" style="font-size:.7rem">${esc(p.description)}</span>`:''}
+          </td>
+          <td>${buildParamInput(p.name, null, p, true)}</td>
           <td><span class="param-src-missing">MISSING</span></td>
         </tr>`;
       });
@@ -110,7 +162,18 @@ async function executeAutofix() {
   const params = {};
   document.querySelectorAll('.af-param').forEach(inp => {
     const v = inp.value.trim();
-    if (v) params[inp.dataset.name] = v;
+    const dataType = inp.dataset.type || '';
+    if (v) {
+      if (dataType === 'array') {
+        params[inp.dataset.name] = v.split(',').map(x => x.trim()).filter(Boolean);
+      } else {
+        params[inp.dataset.name] = v;
+      }
+    }
+  });
+  // Boolean checkboxes
+  document.querySelectorAll('.af-param-bool').forEach(cb => {
+    params[cb.dataset.name] = cb.checked;
   });
 
   try {
@@ -1465,6 +1528,51 @@ function esc(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').
 // =====================================================================
 let autofixState = {};
 
+
+// Build the right input control for a policy parameter
+function buildParamInput(name, value, info, isMissing=false) {
+  const type = (info.type||'String').toLowerCase();
+  const allowed = info.allowed;
+  const borderStyle = isMissing ? 'border-color:#f1707b;' : '';
+
+  // Dropdown if allowedValues defined
+  if (allowed && Array.isArray(allowed) && allowed.length > 0) {
+    const opts = allowed.map(v => {
+      const vStr = typeof v === 'object' ? JSON.stringify(v) : String(v);
+      const selected = value !== null && value !== undefined && String(value) === vStr ? 'selected' : '';
+      return `<option value="${esc(vStr)}" ${selected}>${esc(vStr)}</option>`;
+    }).join('');
+    const placeholder = isMissing ? `<option value="" selected>-- select --</option>` : '';
+    return `<select class="param-input af-param inp" data-name="${esc(name)}" style="${borderStyle}font-size:.82rem">${placeholder}${opts}</select>`;
+  }
+
+  // Boolean toggle
+  if (type === 'boolean') {
+    const checked = value === true || value === 'true' ? 'checked' : '';
+    return `<label style="display:flex;align-items:center;gap:8px;font-size:.84rem">
+      <input type="checkbox" class="af-param-bool" data-name="${esc(name)}" ${checked} style="width:16px;height:16px">
+      <span id="bool-label-${esc(name)}">${checked ? 'true' : 'false'}</span>
+    </label>`;
+  }
+
+  // Array - comma separated
+  if (type === 'array') {
+    const arrVal = Array.isArray(value) ? value.join(', ') : (value || '');
+    return `<input class="param-input af-param inp" data-name="${esc(name)}" data-type="array"
+      value="${esc(String(arrVal))}"
+      placeholder="value1, value2, ..."
+      title="Enter comma-separated values"
+      style="${borderStyle}font-size:.82rem">`;
+  }
+
+  // Default: text input
+  const strVal = value !== null && value !== undefined ? String(value) : '';
+  return `<input class="param-input af-param inp" data-name="${esc(name)}"
+    value="${esc(strVal)}"
+    placeholder="${isMissing ? 'Enter value...' : ''}"
+    style="${borderStyle}font-size:.82rem">`;
+}
+
 async function startAutoFix(btn, escapedJson) {
   const ctx = JSON.parse(unesc(escapedJson));
   btn.disabled = true;
@@ -1511,10 +1619,13 @@ async function startAutoFix(btn, escapedJson) {
       const srcLabel = info.source==='exact_match'?`<span class="param-src-exact">✓ exact match</span>`:
         info.source.startsWith('fuzzy')?`<span class="param-src-fuzzy">~ fuzzy: ${esc(info.source.split(':')[1])}</span>`:
         `<span class="param-src-default">default</span>`;
-      const val = info.value !== null && info.value !== undefined ? JSON.stringify(info.value) : '';
       tbody.innerHTML += `<tr>
-        <td><strong>${esc(name)}</strong><br><span class="muted" style="font-size:.72rem">${esc(info.type)}</span></td>
-        <td><input class="param-input af-param" data-name="${esc(name)}" value="${esc(val.replace(/^"|"$/g,''))}"></td>
+        <td>
+          <strong>${esc(name)}</strong>
+          <br><span class="muted" style="font-size:.72rem">${esc(info.type||'String')}</span>
+          ${info.description?`<br><span class="muted" style="font-size:.7rem">${esc(info.description)}</span>`:''}
+        </td>
+        <td>${buildParamInput(name, info.value, info)}</td>
         <td>${srcLabel}</td>
       </tr>`;
     });
@@ -1524,8 +1635,12 @@ async function startAutoFix(btn, escapedJson) {
     if (unmapped.length) {
       unmapped.forEach(p => {
         tbody.innerHTML += `<tr>
-          <td><strong>${esc(p.name)}</strong><br><span class="param-src-missing">⚠ required - no value found</span></td>
-          <td><input class="param-input af-param" data-name="${esc(p.name)}" placeholder="Enter value..." style="border-color:#f1707b"></td>
+          <td>
+            <strong>${esc(p.name)}</strong>
+            <br><span class="param-src-missing">⚠ required - no value found</span>
+            ${p.description?`<br><span class="muted" style="font-size:.7rem">${esc(p.description)}</span>`:''}
+          </td>
+          <td>${buildParamInput(p.name, null, p, true)}</td>
           <td><span class="param-src-missing">MISSING</span></td>
         </tr>`;
       });
@@ -1565,7 +1680,18 @@ async function executeAutofix() {
   const params = {};
   document.querySelectorAll('.af-param').forEach(inp => {
     const v = inp.value.trim();
-    if (v) params[inp.dataset.name] = v;
+    const dataType = inp.dataset.type || '';
+    if (v) {
+      if (dataType === 'array') {
+        params[inp.dataset.name] = v.split(',').map(x => x.trim()).filter(Boolean);
+      } else {
+        params[inp.dataset.name] = v;
+      }
+    }
+  });
+  // Boolean checkboxes
+  document.querySelectorAll('.af-param-bool').forEach(cb => {
+    params[cb.dataset.name] = cb.checked;
   });
 
   try {
