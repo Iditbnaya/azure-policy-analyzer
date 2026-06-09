@@ -426,13 +426,13 @@ tr.clickable{cursor:pointer}tr.clickable:hover td{background:#faf9f8}
   <div id="results" class="hidden">
     <div class="stats" id="stats"></div>
     <div class="tabs">
-      <div class="tab active" id="tab-btn-compliance" onclick="showTab('compliance')">Compliance Issues <span class="tab-badge red" id="tbadge-compliance">0</span></div>
-      <div class="tab" id="tab-btn-custom" onclick="showTab('custom')">Custom Policy Health <span class="tab-badge amber" id="tbadge-custom">0</span></div>
-      <div class="tab" id="tab-btn-recs" onclick="showTab('recs')">Recommendations <span class="tab-badge" id="tbadge-recs">0</span></div>
+      <div class="tab" id="tab-btn-compliance" onclick="showTab('compliance')">Non-Compliance <span class="tab-badge red" id="tbadge-compliance">0</span></div>
+      <div class="tab" id="tab-btn-custom" onclick="showTab('custom')">Custom Policy Issues <span class="tab-badge amber" id="tbadge-custom">0</span></div>
+      <div class="tab active" id="tab-btn-recs" onclick="showTab('recs')">🔄 Built-in Replacements <span class="tab-badge" id="tbadge-recs">0</span></div>
       <div class="tab" id="tab-btn-agent" onclick="showTab('agent')">🤖 Policy Agent</div>
     </div>
 
-    <div class="tc active" id="tc-compliance">
+    <div class="tc" id="tc-compliance">
       <div class="card"><div class="card-title">Non-Compliant Policy Assignments</div><div id="compliance-body"></div></div>
     </div>
     <div class="tc" id="tc-custom">
@@ -448,10 +448,21 @@ tr.clickable{cursor:pointer}tr.clickable:hover td{background:#faf9f8}
         <div id="custom-body"></div>
       </div>
     </div>
-    <div class="tc" id="tc-recs">
+    <div class="tc active" id="tc-recs">
       <div class="card">
-        <div class="card-title">Built-in Policy Recommendations</div>
-        <p class="muted" style="margin-bottom:16px;font-size:.84rem">These built-in policies could replace your custom ones - they update automatically with Azure, eliminating definition drift.</p>
+        <div class="card-title">
+          🔄 Built-in Policy Replacements
+          <span class="badge b-ok" style="font-size:.72rem;margin-left:8px">Auto-updates with Azure</span>
+        </div>
+        <div style="background:#dff6dd;border:1px solid #92d9a0;border-radius:8px;padding:12px 16px;margin-bottom:18px;font-size:.84rem;line-height:1.6">
+          <strong>Goal:</strong> Replace your custom policies with Microsoft-maintained built-in equivalents.
+          Built-in policies are updated automatically when Azure APIs change - no more broken definitions or outdated policy rules.
+          Click <strong>Auto Fix</strong> on any row to create the new assignment instantly.
+        </div>
+        <div class="filter-bar">
+          <input class="search-inp" id="recs-search" type="text" placeholder="Search custom or built-in name..." oninput="filterRecs(this.value)" style="width:280px">
+          <span class="muted" style="font-size:.8rem" id="recs-count-label"></span>
+        </div>
         <div id="recs-body"></div>
       </div>
     </div>
@@ -884,7 +895,8 @@ function renderResults(results) {
   document.getElementById('tbadge-recs').textContent=totalRecs;
   renderCompliance(results); renderCustom(results); renderRecs(results);
   document.getElementById('results').classList.remove('hidden');
-  if(results.length===1)document.getElementById('results').scrollIntoView({behavior:'smooth'});
+  showTab('recs');
+  document.getElementById('results').scrollIntoView({behavior:'smooth'});
 }
 function renderCompliance(results) {
   const el=document.getElementById('compliance-body');
@@ -927,17 +939,151 @@ function renderIssues(issues) {
   return'<div>'+issues.map(i=>{const icon=i.severity==='error'?'🔴':i.severity==='warning'?'🟡':'ℹ️';return`<div class="issue-item"><span class="issue-icon">${icon}</span><div><div class="issue-msg">${esc(i.message||'')}</div>${i.fix?`<div class="issue-fix"><span class="fix-kw">Fix: </span>${esc(i.fix)}</div>`:''}</div></div>`;}).join('')+'</div>';
 }
 function renderRecs(results) {
-  const el=document.getElementById('recs-body');
-  let all=[];results.forEach(r=>(r.recommendations||[]).forEach(rec=>all.push({...rec,sub_name:r.subscription_name})));
-  if(!all.length){el.innerHTML='<div class="empty"><div class="empty-icon">💡</div><p>No built-in alternatives found.</p></div>';return;}
-  let h='';
-  all.forEach(rec=>{const c=rec.custom_policy||{};h+=`<div class="rec-card"><div class="rec-hdr"><div><div class="rec-custom-name">📝 ${esc(c.display_name||c.name||'')}</div><div style="margin-top:4px;display:flex;gap:6px">${c.category?`<span class="tag">${esc(c.category)}</span>`:''} ${c.effect?`<span class="tag">${esc(c.effect)}</span>`:''} ${(c.issue_count||0)+(c.warning_count||0)>0?`<span class="badge b-warn">${(c.issue_count||0)+(c.warning_count||0)} issue(s)</span>`:''}</div></div><span class="badge b-info">${(rec.matches||[]).length} alternative(s)</span></div><div class="rec-body">${(rec.matches||[]).map(m=>{const sc=m.match_score||0;return`<div class="match-item"><span class="match-score ${sc>=60?'hi':''}">${sc}%</span><div style="flex:1"><div class="match-name">${esc(m.display_name||m.name||'')}</div><div class="match-desc">${esc((m.description||'').substring(0,160))}${(m.description||'').length>160?'...':''}</div><div class="match-why">↳ ${esc(m.match_reason||'')}</div><div class="match-meta">${m.category?`<span class="tag">${esc(m.category)}</span>`:''} ${m.effect?`<span class="tag">${esc(m.effect)}</span>`:''} ${m.name?`<a class="portal-link" href="https://portal.azure.com/#view/Microsoft_Azure_Policy/PolicyDetailBlade/definitionId/%2Fproviders%2FMicrosoft.Authorization%2FpolicyDefinitions%2F${encodeURIComponent(m.name)}" target="_blank">View in Portal ↗</a>`:''}</div></div></div>`;}).join('')}</div></div>`;});
-  el.innerHTML=h;
+  const el = document.getElementById('recs-body');
+
+  // Build assignment lookup: custom policy id -> existing assignments
+  const assignMap = {};
+  results.forEach(r => (r.assignments||[]).forEach(a => {
+    const pid = (a.policy_definition_id||'').toLowerCase();
+    if (!assignMap[pid]) assignMap[pid] = [];
+    assignMap[pid].push({...a, sub_id: r.subscription_id, sub_name: r.subscription_name});
+  }));
+
+  // Flatten: one row per (custom policy, best match)
+  const rows = [];
+  results.forEach(r => (r.recommendations||[]).forEach(rec => {
+    const c = rec.custom_policy||{};
+    const matches = rec.matches||[];
+    if (!matches.length) return;
+    const best = matches[0];
+    const cid = (c.id||'').toLowerCase();
+    rows.push({
+      custom: c,
+      best_match: best,
+      all_matches: matches,
+      assignments: assignMap[cid]||[],
+      sub_id: r.subscription_id,
+      sub_name: r.subscription_name,
+    });
+  }));
+
+  // Update count label
+  const lbl = document.getElementById('recs-count-label');
+  if (lbl) lbl.textContent = `${rows.length} custom policies with built-in equivalent`;
+
+  if (!rows.length) {
+    el.innerHTML = '<div class="empty"><div class="empty-icon">✅</div><p>No custom policies with built-in equivalents found in this subscription.</p></div>';
+    document.getElementById('tbadge-recs').textContent = 0;
+    return;
+  }
+  document.getElementById('tbadge-recs').textContent = rows.length;
+
+  // Sort by match score desc
+  rows.sort((a,b) => (b.best_match.match_score||0) - (a.best_match.match_score||0));
+
+  let h = `<div class="tbl-wrap"><table id="recs-tbl">
+    <thead><tr>
+      <th></th>
+      <th>Your Custom Policy</th>
+      <th>Best Built-in Replacement</th>
+      <th>Match</th>
+      <th>Category</th>
+      <th>Assigned?</th>
+      <th>Action</th>
+    </tr></thead><tbody>`;
+
+  rows.forEach((row, i) => {
+    const c = row.custom;
+    const m = row.best_match;
+    const sc = m.match_score||0;
+    const scoreColor = sc >= 70 ? '#107c10' : sc >= 50 ? '#7a4100' : '#605e5c';
+    const hasAssign = row.assignments.length > 0;
+    const builtinId = m.name ? `/providers/Microsoft.Authorization/policyDefinitions/${m.name}` : '';
+    const uid = 'rec-' + i;
+    const fixCtx = esc(JSON.stringify({
+      custom_policy: c,
+      custom_assignments: row.assignments,
+      builtin_name: m.name,
+      builtin_display_name: m.display_name||m.name,
+      builtin_id: builtinId,
+      sub_id: row.sub_id,
+    }));
+
+    h += `<tr class="clickable rec-row" data-search="${esc((c.display_name||c.name||'').toLowerCase()+' '+(m.display_name||'').toLowerCase())}" onclick="toggleRecRow('${uid}',this)">
+      <td><span class="arr" id="arr-${uid}">&#9654;</span></td>
+      <td>
+        <div style="font-weight:700;font-size:.875rem">${esc(c.display_name||c.name||'')}</div>
+        <div style="font-size:.72rem;color:#8a8886;margin-top:2px">${esc(c.name||'')}</div>
+        ${c.effect ? `<span class="tag" style="margin-top:3px">${esc(c.effect)}</span>` : ''}
+      </td>
+      <td>
+        <div style="font-weight:700;font-size:.875rem;color:#0078d4">${esc(m.display_name||m.name||'')}</div>
+        <div style="font-size:.75rem;color:#605e5c;margin-top:2px">${esc((m.description||'').substring(0,90))}${(m.description||'').length>90?'...':''}</div>
+      </td>
+      <td><span style="font-weight:800;color:${scoreColor};font-size:1rem">${sc}%</span></td>
+      <td>${m.category ? `<span class="tag">${esc(m.category)}</span>` : '<span class="muted">-</span>'}</td>
+      <td>${hasAssign
+        ? `<span class="badge b-ok">✓ ${row.assignments.length} assignment${row.assignments.length>1?'s':''}</span>`
+        : '<span class="badge b-info">No assignment</span>'
+      }</td>
+      <td>
+        ${builtinId
+          ? `<button class="autofix-btn" onclick="event.stopPropagation();startAutoFix(this,'${fixCtx}')">🔧 Auto Fix</button>`
+          : ''}
+      </td>
+    </tr>
+    <tr class="exp-row" id="${uid}"><td colspan="7">
+      <div class="detail-box" style="display:grid;grid-template-columns:1fr 1fr;gap:20px">
+        <div>
+          <div style="font-weight:700;font-size:.82rem;color:#605e5c;margin-bottom:8px">YOUR CUSTOM POLICY</div>
+          ${c.description ? `<div style="font-size:.82rem;margin-bottom:8px">${esc(c.description)}</div>` : ''}
+          <div style="font-size:.8rem">
+            ${c.category ? `<span class="tag">${esc(c.category)}</span> ` : ''}
+            ${c.effect ? `<span class="tag">Effect: ${esc(c.effect)}</span> ` : ''}
+            ${c.mode ? `<span class="tag">Mode: ${esc(c.mode)}</span>` : ''}
+          </div>
+          ${hasAssign ? `<div style="margin-top:8px">${row.assignments.map(a=>`<div class="assignment-tag" style="margin-bottom:3px">📌 ${esc(a.display_name||a.name||'')} <span style="opacity:.7">${esc(a.scope||'')}</span></div>`).join('')}</div>` : '<div style="font-size:.78rem;color:#8a8886;margin-top:8px">Not currently assigned</div>'}
+          ${row.all_matches.length > 1 ? `<div style="margin-top:12px;font-size:.78rem;color:#605e5c;font-weight:700">OTHER MATCHES (${row.all_matches.length-1}):</div>
+          ${row.all_matches.slice(1).map(alt=>`<div style="font-size:.78rem;margin-top:4px">• ${esc(alt.display_name||'')} <span style="color:#8a8886">(${alt.match_score}%)</span></div>`).join('')}` : ''}
+        </div>
+        <div>
+          <div style="font-weight:700;font-size:.82rem;color:#107c10;margin-bottom:8px">✓ BUILT-IN REPLACEMENT</div>
+          <div style="font-weight:700;font-size:.9rem;margin-bottom:6px">${esc(m.display_name||m.name||'')}</div>
+          <div style="font-size:.82rem;color:#605e5c;margin-bottom:10px">${esc(m.description||'')}</div>
+          <div style="font-size:.78rem;background:#dff6dd;border:1px solid #92d9a0;border-radius:5px;padding:8px 10px;margin-bottom:10px">
+            <strong>Why migrate?</strong> This is a Microsoft-maintained policy. It updates automatically when Azure APIs change - no more broken definitions, no maintenance required.
+          </div>
+          <div style="font-size:.78rem;color:#605e5c;margin-bottom:8px">Match reason: ${esc(m.match_reason||'')}</div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap">
+            ${m.name ? `<a class="portal-link" href="https://portal.azure.com/#view/Microsoft_Azure_Policy/PolicyDetailBlade/definitionId/%2Fproviders%2FMicrosoft.Authorization%2FpolicyDefinitions%2F${encodeURIComponent(m.name)}" target="_blank" style="font-size:.8rem">View in Portal ↗</a>` : ''}
+            ${builtinId ? `<button class="autofix-btn" onclick="startAutoFix(this,'${fixCtx}')">🔧 Apply Auto Fix</button>` : ''}
+          </div>
+        </div>
+      </div>
+    </td></tr>`;
+  });
+
+  el.innerHTML = h + '</tbody></table></div>';
 }
 
-// =====================================================================
-// Agent
-// =====================================================================
+function toggleRecRow(uid, row) {
+  const exp = document.getElementById(uid);
+  const arr = document.getElementById('arr-'+uid);
+  const open = exp.classList.contains('open');
+  exp.classList.toggle('open', !open);
+  arr.classList.toggle('open', !open);
+}
+
+function filterRecs(val) {
+  const v = val.toLowerCase();
+  document.querySelectorAll('#recs-tbl tbody tr.rec-row').forEach(row => {
+    const match = !v || (row.dataset.search||'').includes(v);
+    row.style.display = match ? '' : 'none';
+    const uid = row.querySelector('.arr')?.id?.replace('arr-','');
+    if (uid) { const ex = document.getElementById(uid); if(ex) ex.style.display = match?'':'none'; }
+  });
+}
+
 function setApiType(t) {
   agentApiType=t;
   document.getElementById('type-azurecred').classList.toggle('active',t==='azure-credential');
@@ -1333,6 +1479,9 @@ function onModelSelect(sel) {
 </script>
 </body>
 </html>
+
+
+
 
 
 
