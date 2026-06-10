@@ -63,6 +63,7 @@ def main():
             "description": p.description or "",
             "category": meta.get("category", "") if meta else "",
             "effect": effect,
+            "deprecated": bool(meta.get("deprecated", False)) if meta else False,
             # Semantic fingerprint
             "operation": op["operation"],
             "resource_types": list(op["resource_types"]),

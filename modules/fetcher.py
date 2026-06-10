@@ -382,6 +382,7 @@ class PolicyFetcher:
                     "description": p.description or "",
                     "category": meta.get("category", "") if meta else "",
                     "effect": _extract_effect(rule),
+                    "deprecated": bool(meta.get("deprecated", False)) if meta else False,
                     # Semantic fingerprint - same extractor as custom policies
                     "operation": op["operation"],
                     "resource_types": list(op["resource_types"]),

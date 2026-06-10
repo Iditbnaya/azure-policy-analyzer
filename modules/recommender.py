@@ -231,9 +231,16 @@ class PolicyRecommender:
         if not problematic_policies or not builtin_policies:
             return []
 
+        # Filter out deprecated built-ins before matching
+        active_builtins = [
+            b for b in builtin_policies
+            if not b.get("deprecated", False)
+            and "[deprecated]" not in b.get("display_name", "").lower()
+        ]
+
         recommendations = []
         for policy in problematic_policies:
-            matches = self._find_matches(policy, builtin_policies)
+            matches = self._find_matches(policy, active_builtins)
             if matches:
                 recommendations.append({
                     "custom_policy": {
