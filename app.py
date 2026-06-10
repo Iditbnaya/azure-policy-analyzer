@@ -331,10 +331,11 @@ def scan_stream_route(scan_id):
                     log_q.put(f"[{ts()}] [{sname}] 🎓 {len(insights['audit_ready'])} audit assignments ({ready} ready for Deny)")
 
                 assigned_def_names = {a.get("policy_definition_id","").rstrip("/").split("/")[-1].lower() for a in assignments}
-                from app import POPULAR_RECOMMENDED
+                # Reference POPULAR_RECOMMENDED directly from module scope (no import needed - same file)
+                _popular = POPULAR_RECOMMENDED
                 recommended_assignments = [
                     {**r, "portal_url": f"https://portal.azure.com/#view/Microsoft_Azure_Policy/PolicyDetailBlade/definitionId/%2Fproviders%2FMicrosoft.Authorization%2FpolicyDefinitions%2F{r['name']}"}
-                    for r in POPULAR_RECOMMENDED if r["name"].lower() not in assigned_def_names
+                    for r in _popular if r["name"].lower() not in assigned_def_names
                 ][:6]
 
                 result_q.put(("result", {
