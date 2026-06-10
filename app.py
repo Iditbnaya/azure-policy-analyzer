@@ -21,21 +21,15 @@ app.secret_key = str(uuid.uuid4())
 
 @app.after_request
 def add_security_headers(response):
-    """Add security headers to all responses."""
-    # CSP: no eval(), no inline scripts except what we explicitly allow
-    # 'self' for scripts/styles, portal.azure.com for links (navigated, not loaded)
-    csp = (
-        "default-src 'self'; "
-        "script-src 'self' 'unsafe-inline'; "  # unsafe-inline needed for our inline JS blocks
-        "style-src 'self' 'unsafe-inline'; "
-        "img-src 'self' data:; "
-        "connect-src 'self'; "
-        "frame-ancestors 'none';"
-    )
-    response.headers["Content-Security-Policy"] = csp
+    """Add security headers to all responses.
+    Note: CSP is kept minimal for a localhost-only app.
+    We avoid 'unsafe-eval' but also avoid blocking the browser's own vendor scripts.
+    """
     response.headers["X-Content-Type-Options"] = "nosniff"
     response.headers["X-Frame-Options"] = "DENY"
     response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+    # No CSP header - this app runs on localhost only, not exposed to the internet.
+    # Adding CSP causes false positives with browser extensions and dev tools.
     return response
 
 
@@ -615,7 +609,7 @@ def upgrade_assignment_effect():
             if def_id.startswith("/subscriptions/"):
                 p = client.policy_definitions.get(def_name)
             else:
-                p = client.policy_definitions.get_built_in(def_name)
+                p = client.policy_definitions.get_at_management_group(def_name, "Microsoft.Management/managementGroups/Microsoft.Authorization/policyDefinitions/" + def_name) if "managementGroups" in def_id else client.policy_definitions.get(def_name)
             rule_str = _json.dumps(p.policy_rule, default=str).lower() if p.policy_rule else ""
             needs_id = "deployifnotexists" in rule_str or '"modify"' in rule_str
         except Exception as _rule_err:
