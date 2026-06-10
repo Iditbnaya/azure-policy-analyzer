@@ -1,7 +1,7 @@
 flask>=3.0.0
 azure-identity>=1.15.0
 azure-mgmt-policyinsights>=1.0.1
-azure-mgmt-resource>=23.0.0
+azure-mgmt-resource>=21.1.0,<22.0.0
 azure-mgmt-subscription>=3.1.1
 azure-mgmt-managementgroups>=1.0.0
 openai>=1.30.0

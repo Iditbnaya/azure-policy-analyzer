@@ -833,6 +833,59 @@ function appendConsoleLog(msg) {
   el.scrollTop = el.scrollHeight;
 }
 
+
+// =====================================================================
+// Dismiss / restore recommendations (persisted in localStorage)
+// =====================================================================
+const DISMISS_KEY = 'apa_dismissed_policies';
+
+function getDismissed() {
+  try {
+    return new Set(JSON.parse(localStorage.getItem(DISMISS_KEY)||'[]'));
+  } catch { return new Set(); }
+}
+
+function saveDismissed(set) {
+  localStorage.setItem(DISMISS_KEY, JSON.stringify([...set]));
+}
+
+function toggleDismiss(policyId, btn) {
+  if (!policyId) return;
+  const dismissed = getDismissed();
+  const isDismissed = dismissed.has(policyId);
+  if (isDismissed) {
+    dismissed.delete(policyId);
+  } else {
+    dismissed.add(policyId);
+  }
+  saveDismissed(dismissed);
+
+  // Update the row visually without full re-render
+  const row = btn.closest('tr');
+  if (row) {
+    row.dataset.dismissed = isDismissed ? '0' : '1';
+    row.classList.toggle('dismissed-row', !isDismissed);
+    btn.className = isDismissed ? 'btn-dismiss' : 'btn-undismiss';
+    btn.textContent = isDismissed ? '🙈 Dismiss' : '↩ Restore';
+    // If currently in non-dismissed view, hide/show appropriately
+    if (recsActiveFilter !== 'dismissed' && recsActiveFilter !== 'all') {
+      applyRecsFilters();
+    } else if (recsActiveFilter === 'all' && !isDismissed) {
+      // Just dismissed in 'all' view - hide immediately
+      row.style.display = 'none';
+      const uid = row.querySelector('.arr')?.id?.replace('arr-','');
+      if (uid) { const ex = document.getElementById(uid); if (ex) ex.style.display = 'none'; }
+    } else if (recsActiveFilter === 'all' && isDismissed) {
+      // Was dismissed but we hit restore while showing All - shouldn't normally happen
+    }
+  }
+
+  // Update count label
+  const total = document.querySelectorAll('#recs-tbl tbody tr.rec-row:not(.dismissed-row)').length;
+  const lbl = document.getElementById('recs-count-label');
+  if (lbl) lbl.textContent = `${total} policies`;
+}
+
 </script>
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
@@ -974,6 +1027,13 @@ tr.clickable{cursor:pointer}tr.clickable:hover td{background:#faf9f8}
 .step-done-ico{color:#107c10}
 .step-active-ico{color:#0078d4}
 .step-pending-ico{color:#8a8886}
+.btn-dismiss{background:none;border:1px solid #c8c6c4;color:#605e5c;padding:3px 10px;border-radius:4px;font-size:.75rem;cursor:pointer;transition:all .15s}
+.btn-dismiss:hover{background:#fde7e9;border-color:#f1707b;color:#a4262c}
+.btn-undismiss{background:#f3f2f1;border:1px solid #c8c6c4;color:#605e5c;padding:3px 10px;border-radius:4px;font-size:.75rem;cursor:pointer}
+.nc-badge-critical{background:#a4262c;color:#fff;padding:2px 8px;border-radius:3px;font-size:.72rem;font-weight:700}
+.nc-badge-warn{background:#fff4ce;color:#7a4100;padding:2px 8px;border-radius:3px;font-size:.72rem;font-weight:700}
+.nc-badge-ok{background:#dff6dd;color:#107c10;padding:2px 8px;border-radius:3px;font-size:.72rem;font-weight:700}
+.dismissed-row td{opacity:.4}
 .scan-console{background:#1e1e1e;border-radius:6px;padding:10px 12px;margin-top:10px;font-family:monospace;font-size:.76rem;color:#cccccc;height:120px;overflow-y:auto;line-height:1.6;white-space:pre-wrap;word-break:break-all}
 .scan-console .log-warn{color:#f7c948}
 .scan-console .log-error{color:#f14c4c}
@@ -1137,6 +1197,8 @@ tr.clickable{cursor:pointer}tr.clickable:hover td{background:#faf9f8}
         </div>
         <div class="filter-bar" style="flex-wrap:wrap;gap:8px">
           <button class="filter-btn active" data-recs-filter="all" onclick="setRecsFilter('all',this)">All</button>
+          <button class="filter-btn" data-recs-filter="non_compliant" onclick="setRecsFilter('non_compliant',this)">🔴 Has Non-Compliant</button>
+          <button class="filter-btn" data-recs-filter="dismissed" onclick="setRecsFilter('dismissed',this)">🙈 Dismissed</button>
           <button class="filter-btn" data-recs-filter="assigned" onclick="setRecsFilter('assigned',this)">📌 Already Assigned</button>
           <button class="filter-btn" data-recs-filter="unassigned" onclick="setRecsFilter('unassigned',this)">No Assignment</button>
           <button class="filter-btn" data-recs-filter="error" onclick="setRecsFilter('error',this)">🔴 Has Issues</button>
@@ -1843,26 +1905,126 @@ function renderCompliance(results) {
     </tr>`;});
   el.innerHTML=h+'</tbody></table></div>';
 }
+// --- Ignore list (localStorage) ---
+function getIgnoredPolicies() {
+  try { return new Set(JSON.parse(localStorage.getItem('ignoredPolicies')||'[]')); }
+  catch(e) { return new Set(); }
+}
+function setIgnoredPolicies(s) {
+  localStorage.setItem('ignoredPolicies', JSON.stringify([...s]));
+}
+function toggleIgnorePolicy(id, btn) {
+  event.stopPropagation();
+  const ig = getIgnoredPolicies();
+  if (ig.has(id)) { ig.delete(id); } else { ig.add(id); }
+  setIgnoredPolicies(ig);
+  renderCustom(window._lastCustomResults);
+}
+function toggleShowIgnored() {
+  window._showIgnored = !window._showIgnored;
+  const btn = document.getElementById('show-ignored-btn');
+  if (btn) btn.textContent = window._showIgnored ? '🙈 Hide Ignored' : '👁 Show Ignored';
+  renderCustom(window._lastCustomResults);
+}
+window._showIgnored = false;
+
 function renderCustom(results) {
-  let all=[];results.forEach(r=>(r.custom_policies?.all||[]).forEach(p=>all.push({...p,sub_name:r.subscription_name})));
+  window._lastCustomResults = results;
+
+  // Build compliance lookup: custom policy definition id -> total non_compliant_resources
+  const ncMap = {}; // policy_def_id (lower) -> count
+  results.forEach(r => {
+    const compMap = {}; // assignment_id (lower) -> nc count
+    (r.compliance||[]).forEach(c => {
+      const aid = (c.policy_assignment_id||'').toLowerCase();
+      if (aid) compMap[aid] = (compMap[aid]||0) + (c.non_compliant_resources||0);
+    });
+    (r.assignments||[]).forEach(a => {
+      const defId = (a.policy_definition_id||'').toLowerCase();
+      const aid   = (a.id||'').toLowerCase();
+      if (defId && compMap[aid] !== undefined) {
+        ncMap[defId] = (ncMap[defId]||0) + compMap[aid];
+      }
+    });
+  });
+
+  let all=[];
+  results.forEach(r=>(r.custom_policies?.all||[]).forEach(p=>all.push({...p,sub_name:r.subscription_name})));
   const el=document.getElementById('custom-body');
   if(!all.length){el.innerHTML='<div class="empty"><div class="empty-icon">📋</div><p>No custom policies found.</p></div>';return;}
-  const order={error:0,warning:1,info:2,ok:3};all.sort((a,b)=>(order[a.severity]||3)-(order[b.severity]||3));
-  let h=`<div class="tbl-wrap"><table id="custom-tbl"><thead><tr><th></th><th>Display Name</th><th>Category</th><th>Effect</th><th>Status</th><th>Issues</th><th>Subscription</th></tr></thead><tbody>`;
-  all.forEach((p,i)=>{
+
+  const ignored = getIgnoredPolicies();
+  const order={error:0,warning:1,info:2,ok:3};
+  all.sort((a,b)=>(order[a.severity]||3)-(order[b.severity]||3));
+
+  const visible = all.filter(p => window._showIgnored ? true : !ignored.has(p.id||p.name));
+  const ignoredCount = all.filter(p => ignored.has(p.id||p.name)).length;
+
+  const ignoredBar = ignoredCount > 0
+    ? `<div style="margin-bottom:8px;display:flex;align-items:center;gap:10px">
+        <span class="muted" style="font-size:.82rem">${ignoredCount} polic${ignoredCount===1?'y':'ies'} marked as ignored</span>
+        <button id="show-ignored-btn" onclick="toggleShowIgnored()" style="font-size:.78rem;padding:3px 10px;border:1px solid #ccc;border-radius:4px;cursor:pointer;background:#f3f3f3">
+          ${window._showIgnored?'🙈 Hide Ignored':'👁 Show Ignored'}
+        </button>
+       </div>`
+    : '';
+
+  let h=`${ignoredBar}<div class="tbl-wrap"><table id="custom-tbl">
+    <thead><tr>
+      <th></th>
+      <th>Display Name</th>
+      <th>Category</th>
+      <th>Effect</th>
+      <th>Non-Compliant</th>
+      <th>Status</th>
+      <th>Issues</th>
+      <th>Subscription</th>
+      <th></th>
+    </tr></thead><tbody>`;
+
+  visible.forEach((p,i)=>{
+    const pid = (p.id||p.name||'').toLowerCase();
+    const isIgnored = ignored.has(p.id||p.name);
     const bc=p.severity==='error'?'b-err':p.severity==='warning'?'b-warn':p.severity==='info'?'b-info':'b-ok';
     const sl=p.severity==='ok'?'Healthy':p.severity.charAt(0).toUpperCase()+p.severity.slice(1);
-    const tot=(p.issue_count||0)+(p.warning_count||0);const uid='row-'+i;
-    h+=`<tr class="clickable" data-sev="${p.severity}" data-name="${esc((p.display_name||p.name||'').toLowerCase())}" onclick="toggleRow('${uid}',this)">
+    const tot=(p.issue_count||0)+(p.warning_count||0);
+    const uid='row-'+i;
+
+    // Non-compliant badge
+    const nc = ncMap[pid];
+    let ncBadge;
+    if (nc === undefined) {
+      ncBadge = '<span class="muted" style="font-size:.78rem">No data</span>';
+    } else if (nc === 0) {
+      ncBadge = '<span class="badge b-ok" style="font-size:.78rem">✓ Compliant</span>';
+    } else {
+      ncBadge = `<span class="badge b-err" style="font-size:.78rem">⚠ ${nc} resources</span>`;
+    }
+
+    const rowStyle = isIgnored ? 'opacity:0.45;background:#fafafa' : '';
+    const ignoreLabel = isIgnored ? '↩ Unignore' : '✓ Ignore';
+    const ignoreStyle = isIgnored
+      ? 'font-size:.75rem;padding:3px 9px;border:1px solid #bbb;border-radius:4px;cursor:pointer;background:#e8ffe8;color:#107c10'
+      : 'font-size:.75rem;padding:3px 9px;border:1px solid #bbb;border-radius:4px;cursor:pointer;background:#f8f8f8;color:#444';
+
+    h+=`<tr class="clickable" style="${rowStyle}" data-sev="${p.severity}" data-name="${esc((p.display_name||p.name||'').toLowerCase())}" onclick="toggleRow('${uid}',this)">
       <td><span class="arr" id="arr-${uid}">&#9654;</span></td>
-      <td><strong>${esc(p.display_name||p.name||'')}</strong><br><span class="muted" style="font-size:.72rem">${esc(p.name||'')}</span></td>
+      <td>
+        <strong>${esc(p.display_name||p.name||'')}</strong>
+        ${isIgnored ? '<span class="badge" style="background:#e8ffe8;color:#107c10;margin-left:5px;font-size:.7rem">Ignored</span>' : ''}
+        <br><span class="muted" style="font-size:.72rem">${esc(p.name||'')}</span>
+      </td>
       <td>${p.category?`<span class="tag">${esc(p.category)}</span>`:'<span class="muted">-</span>'}</td>
       <td><span class="tag">${esc(p.effect||'Unknown')}</span></td>
+      <td>${ncBadge}</td>
       <td><span class="badge ${bc}">${sl}</span></td>
       <td>${tot>0?`<span style="font-weight:700;color:#a4262c">${tot}</span>`:'<span class="muted">0</span>'}</td>
       <td class="muted">${esc(p.sub_name||'')}</td>
+      <td onclick="event.stopPropagation()">
+        <button onclick="toggleIgnorePolicy(${JSON.stringify(p.id||p.name)},this)" style="${ignoreStyle}">${ignoreLabel}</button>
+      </td>
     </tr>
-    <tr class="exp-row" id="${uid}"><td colspan="7"><div class="detail-box">
+    <tr class="exp-row" id="${uid}"><td colspan="9"><div class="detail-box">
       ${p.description?`<div class="detail-desc">${esc(p.description)}</div>`:''}
       ${renderIssues([...(p.issues||[]),...(p.warnings||[])])}
       ${!tot?'<span style="color:#107c10;font-weight:600">No issues detected</span>':''}
@@ -1923,7 +2085,7 @@ function renderRecs(results) {
       <th>Your Custom Policy</th>
       <th>Best Built-in Replacement</th>
       <th>Match</th>
-      <th>Category</th>
+      <th>Non-Compliant</th>
       <th>Assigned?</th>
       <th>Action</th>
     </tr></thead><tbody>`;
@@ -1947,10 +2109,22 @@ function renderRecs(results) {
 
         const rowOp = (m.operation||'').toLowerCase();
     const rowCat = (m.category||'').toLowerCase();
-    h += `<tr class="clickable rec-row"
+    // Calculate total non-compliant for this custom policy's assignments
+    const cid_lower = (c.id||'').toLowerCase();
+    const relatedAssignments = assignMap[cid_lower]||[];
+    let ncTotal = 0;
+    relatedAssignments.forEach(a => {
+      const aid = (a.id||'').toLowerCase();
+      ncTotal += ncMap[aid]||0;
+    });
+    const isDismissed = dismissed.has(c.name||c.id||'');
+    h += `<tr class="clickable rec-row${isDismissed?' dismissed-row':''}"
       data-search="${esc((c.display_name||c.name||'').toLowerCase()+' '+(m.display_name||'').toLowerCase())}"
       data-assigned="${hasAssign?'1':'0'}"
       data-issues="${((c.issue_count||0)+(c.warning_count||0))>0?'1':'0'}"
+      data-nc="${ncTotal}"
+      data-dismissed="${isDismissed?'1':'0'}"
+      data-policy-id="${esc(c.name||c.id||'')}"
       data-op="${esc(rowOp)}"
       data-cat="${esc(rowCat)}"
       onclick="toggleRecRow('${uid}',this)">
@@ -1965,15 +2139,20 @@ function renderRecs(results) {
         <div style="font-size:.75rem;color:#605e5c;margin-top:2px">${esc((m.description||'').substring(0,90))}${(m.description||'').length>90?'...':''}</div>
       </td>
       <td><span style="font-weight:800;color:${scoreColor};font-size:1rem">${sc}%</span></td>
-      <td>${m.category ? `<span class="tag">${esc(m.category)}</span>` : '<span class="muted">-</span>'}</td>
+      <td>
+        ${ncTotal>0
+          ? `<span class="nc-badge-critical">⚠ ${ncTotal} non-compliant</span>`
+          : '<span class="nc-badge-ok">✓ Compliant</span>'}
+      </td>
       <td>${hasAssign
         ? `<span class="badge b-ok">✓ ${row.assignments.length} assignment${row.assignments.length>1?'s':''}</span>`
         : '<span class="badge b-info">No assignment</span>'
       }</td>
-      <td>
+      <td style="display:flex;gap:6px;flex-wrap:wrap;align-items:center">
         ${builtinId
           ? `<button class="autofix-btn" onclick="event.stopPropagation();startAutoFix(this,'${fixCtx}')">🔧 Auto Fix</button>`
           : ''}
+        <button class="${isDismissed?'btn-undismiss':'btn-dismiss'}" onclick="event.stopPropagation();toggleDismiss('${esc(c.name||c.id||'')}',this)">${isDismissed?'↩ Restore':'🙈 Dismiss'}</button>
       </td>
     </tr>
     <tr class="exp-row" id="${uid}"><td colspan="7">
@@ -2072,6 +2251,8 @@ function applyRecsFilters() {
   document.querySelectorAll('#recs-tbl tbody tr.rec-row').forEach(row => {
     const assigned = row.dataset.assigned === '1';
     const hasIssues = row.dataset.issues === '1';
+    const hasNc = parseInt(row.dataset.nc||'0') > 0;
+    const isDismissed = row.dataset.dismissed === '1';
     const op = (row.dataset.op||'').toLowerCase();
     const cat = (row.dataset.cat||'').toLowerCase();
     const searchText = row.dataset.search||'';
@@ -2080,6 +2261,11 @@ function applyRecsFilters() {
     if (recsActiveFilter === 'assigned' && !assigned) show = false;
     if (recsActiveFilter === 'unassigned' && assigned) show = false;
     if (recsActiveFilter === 'error' && !hasIssues) show = false;
+    if (recsActiveFilter === 'non_compliant' && !hasNc) show = false;
+    if (recsActiveFilter === 'dismissed' && !isDismissed) show = false;
+    if (recsActiveFilter !== 'dismissed' && isDismissed && recsActiveFilter !== 'all') show = false;
+    // Hide dismissed rows from 'all' by default - show only in 'dismissed' filter
+    if (recsActiveFilter === 'all' && isDismissed) show = false;
     if (opFilter && op !== opFilter) show = false;
     if (catFilter && cat !== catFilter) show = false;
     if (search && !searchText.includes(search)) show = false;
@@ -3151,6 +3337,59 @@ function appendConsoleLog(msg) {
   line.textContent = msg;
   el.appendChild(line);
   el.scrollTop = el.scrollHeight;
+}
+
+
+// =====================================================================
+// Dismiss / restore recommendations (persisted in localStorage)
+// =====================================================================
+const DISMISS_KEY = 'apa_dismissed_policies';
+
+function getDismissed() {
+  try {
+    return new Set(JSON.parse(localStorage.getItem(DISMISS_KEY)||'[]'));
+  } catch { return new Set(); }
+}
+
+function saveDismissed(set) {
+  localStorage.setItem(DISMISS_KEY, JSON.stringify([...set]));
+}
+
+function toggleDismiss(policyId, btn) {
+  if (!policyId) return;
+  const dismissed = getDismissed();
+  const isDismissed = dismissed.has(policyId);
+  if (isDismissed) {
+    dismissed.delete(policyId);
+  } else {
+    dismissed.add(policyId);
+  }
+  saveDismissed(dismissed);
+
+  // Update the row visually without full re-render
+  const row = btn.closest('tr');
+  if (row) {
+    row.dataset.dismissed = isDismissed ? '0' : '1';
+    row.classList.toggle('dismissed-row', !isDismissed);
+    btn.className = isDismissed ? 'btn-dismiss' : 'btn-undismiss';
+    btn.textContent = isDismissed ? '🙈 Dismiss' : '↩ Restore';
+    // If currently in non-dismissed view, hide/show appropriately
+    if (recsActiveFilter !== 'dismissed' && recsActiveFilter !== 'all') {
+      applyRecsFilters();
+    } else if (recsActiveFilter === 'all' && !isDismissed) {
+      // Just dismissed in 'all' view - hide immediately
+      row.style.display = 'none';
+      const uid = row.querySelector('.arr')?.id?.replace('arr-','');
+      if (uid) { const ex = document.getElementById(uid); if (ex) ex.style.display = 'none'; }
+    } else if (recsActiveFilter === 'all' && isDismissed) {
+      // Was dismissed but we hit restore while showing All - shouldn't normally happen
+    }
+  }
+
+  // Update count label
+  const total = document.querySelectorAll('#recs-tbl tbody tr.rec-row:not(.dismissed-row)').length;
+  const lbl = document.getElementById('recs-count-label');
+  if (lbl) lbl.textContent = `${total} policies`;
 }
 
 </script>
