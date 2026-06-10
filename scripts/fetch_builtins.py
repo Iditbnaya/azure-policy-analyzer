@@ -32,8 +32,8 @@ def extract_effect(rule: dict) -> str:
             if effect.startswith("[") and "parameters" in effect:
                 return "Parameterized"
             return effect or "Unknown"
-    except Exception:
-        pass
+    except Exception as _e:
+        print(f"  [warn] extract_effect failed: {_e}")
     return "Unknown"
 
 

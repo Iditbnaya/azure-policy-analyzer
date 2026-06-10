@@ -31,8 +31,8 @@ def get_meta() -> dict:
     if META_FILE.exists():
         try:
             return json.loads(META_FILE.read_text(encoding="utf-8"))
-        except Exception:
-            pass
+        except Exception as _e:
+            print(f"  [warn] cache meta read failed: {_e}")
     return {}
 
 
@@ -49,8 +49,8 @@ def load_local() -> list:
             data = json.loads(CACHE_FILE.read_text(encoding="utf-8"))
             if isinstance(data, list):
                 return data
-        except Exception:
-            pass
+        except Exception as _e:
+            print(f"  [warn] cache file read failed: {_e}")
     return []
 
 
@@ -71,11 +71,12 @@ def save(policies: list, source: str = "unknown"):
 
 
 def try_download_remote() -> list:
+    # URL is hardcoded to github.com raw content - scheme is always https  # nosec B310
     try:
         req = urllib.request.Request(
             REMOTE_URL, headers={"User-Agent": "azure-policy-analyzer/1.0"}
         )
-        with urllib.request.urlopen(req, timeout=15) as r:
+        with urllib.request.urlopen(req, timeout=15) as r:  # nosec B310
             data = json.loads(r.read().decode("utf-8"))
             if isinstance(data, list) and len(data) > 100:
                 print(f"  [cache] downloaded {len(data)} built-ins from GitHub")

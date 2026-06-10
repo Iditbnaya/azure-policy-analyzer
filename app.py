@@ -397,8 +397,8 @@ def scan_stream_route(scan_id):
                 while not log_q.empty():
                     try:
                         yield log(log_q.get_nowait())
-                    except Exception:
-                        pass
+                    except Exception as _log_err:  # nosec B110 - log queue drain, safe to skip on error
+                        print(f"[debug] log_q drain: {_log_err}")
                 try:
                     etype, data = result_q.get(timeout=2)
                     done += 1
@@ -410,8 +410,8 @@ def scan_stream_route(scan_id):
                     while not log_q.empty():
                         try:
                             yield log(log_q.get_nowait())
-                        except Exception:
-                            pass
+                        except Exception as _log_err:  # nosec B110 - log queue drain, safe to skip
+                            print(f"[debug] log_q drain: {_log_err}")
                 except queue_module.Empty:
                     ping_count += 1
                     elapsed = int(_time.time() - scan_start)
@@ -439,8 +439,8 @@ def scan_stream_route(scan_id):
                     while not log_q.empty():
                         try:
                             yield log(log_q.get_nowait())
-                        except Exception:
-                            pass
+                        except Exception as _log_err:  # nosec B110 - log queue drain, safe to skip
+                            print(f"[debug] log_q drain: {_log_err}")
 
         ts_final = __import__('datetime').datetime.now().strftime('%H:%M:%S')
         yield log(f"[{ts_final}] All subscriptions scanned. Building agent context...")
@@ -507,10 +507,10 @@ def discover_openai():
                                 "subscription_id": sub["id"],
                                 "deployments": chat_deps,
                             })
-                    except Exception:
-                        pass
-            except Exception:
-                pass
+                    except Exception as _dep_err:
+                        print(f"  [warn] deployment list failed for {acct.name}: {_dep_err}")
+            except Exception as _sub_err:
+                print(f"  [warn] OpenAI scan failed for subscription {sub.get('id','')}: {_sub_err}")
             return found
 
         with ThreadPoolExecutor(max_workers=6) as ex:
@@ -611,8 +611,8 @@ def upgrade_assignment_effect():
                 p = client.policy_definitions.get_built_in(def_name)
             rule_str = _json.dumps(p.policy_rule, default=str).lower() if p.policy_rule else ""
             needs_id = "deployifnotexists" in rule_str or '"modify"' in rule_str
-        except Exception:
-            pass
+        except Exception as _rule_err:
+            print(f"  [warn] could not inspect policy rule for identity check: {_rule_err}")
 
         new_name = re.sub(r"[^a-zA-Z0-9\-]", "-", old_assignment.get("display_name", ""))[:60].strip("-") + "-deny"
 
@@ -746,8 +746,8 @@ def autofix_preview():
         try:
             import json as _json
             rule_str = _json.dumps(builtin.policy_rule, default=str).lower() if builtin.policy_rule else ""
-        except Exception:
-            pass
+        except Exception as _rule_err:
+            print(f"  [warn] could not serialize policy rule: {_rule_err}")
         needs_identity = "deployifnotexists" in rule_str or '"modify"' in rule_str
 
         return jsonify({

@@ -52,8 +52,8 @@ class PolicyFetcher:
                     tenants = list(sc.tenants.list())
                     if tenants:
                         tenant_id = tenants[0].tenant_id
-                except Exception:
-                    pass
+                except Exception as _tid_err:
+                    print(f"  [warn] could not get tenant_id: {_tid_err}")
 
             if not tenant_id:
                 return None
