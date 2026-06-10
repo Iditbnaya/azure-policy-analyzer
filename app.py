@@ -273,15 +273,34 @@ def scan_stream_route(scan_id):
                 analyzer = PolicyAnalyzer()
                 recommender = PolicyRecommender()
 
-                with ThreadPoolExecutor(max_workers=3) as ex:
-                    f_comp = ex.submit(fetcher.get_compliance_summary, sid)
-                    f_ov   = ex.submit(fetcher.get_compliance_overview, sid)
+                # Per-call timeout: if any Azure API call hangs, fail after 90s
+                CALL_TIMEOUT = 90
+
+                with ThreadPoolExecutor(max_workers=4) as ex:
+                    f_comp   = ex.submit(fetcher.get_compliance_summary, sid)
+                    f_ov     = ex.submit(fetcher.get_compliance_overview, sid)
                     f_custom = ex.submit(fetcher.get_custom_policies, sid)
                     f_assign = ex.submit(fetcher.get_policy_assignments, sid)
-                    compliance = f_comp.result()
-                    overview = f_ov.result()
-                    custom_policies = f_custom.result()
-                    assignments = f_assign.result()
+                    try:
+                        compliance       = f_comp.result(timeout=CALL_TIMEOUT)
+                    except Exception as e:
+                        log_q.put(f"[{ts()}] [{sname}] [WARN] compliance timed out/failed: {e}")
+                        compliance = []
+                    try:
+                        overview         = f_ov.result(timeout=CALL_TIMEOUT)
+                    except Exception as e:
+                        log_q.put(f"[{ts()}] [{sname}] [WARN] overview timed out/failed: {e}")
+                        overview = {}
+                    try:
+                        custom_policies  = f_custom.result(timeout=CALL_TIMEOUT)
+                    except Exception as e:
+                        log_q.put(f"[{ts()}] [{sname}] [WARN] custom policies timed out/failed: {e}")
+                        custom_policies = []
+                    try:
+                        assignments      = f_assign.result(timeout=CALL_TIMEOUT)
+                    except Exception as e:
+                        log_q.put(f"[{ts()}] [{sname}] [WARN] assignments timed out/failed: {e}")
+                        assignments = []
 
                 log_q.put(f"[{ts()}] [{sname}] Found {len(compliance)} non-compliant assignments, {len(custom_policies)} custom policies, {len(assignments)} assignments")
 
@@ -341,6 +360,11 @@ def scan_stream_route(scan_id):
                 result_q.put(("error", {"subscription_id": sid, "subscription_name": sname, "error": str(e)}))
 
         n_workers = min(5, len(sub_ids))
+        MAX_TOTAL_WAIT = 600  # 10 minutes total scan timeout
+        import time as _time
+        scan_start = _time.time()
+        ping_count = 0
+
         with ThreadPoolExecutor(max_workers=n_workers) as ex:
             for sid in sub_ids:
                 ex.submit(worker, sid)
@@ -356,6 +380,7 @@ def scan_stream_route(scan_id):
                 try:
                     etype, data = result_q.get(timeout=2)
                     done += 1
+                    ping_count = 0  # reset on progress
                     if etype == "result":
                         accumulated.append(data)
                     yield evt({"type": etype, "data": data, "completed": done, "total": len(sub_ids)})
@@ -366,7 +391,28 @@ def scan_stream_route(scan_id):
                         except Exception:
                             pass
                 except queue_module.Empty:
+                    ping_count += 1
+                    elapsed = int(_time.time() - scan_start)
+
+                    # Log progress every 15 seconds
+                    if ping_count % 8 == 0:
+                        ts_now = __import__('datetime').datetime.now().strftime('%H:%M:%S')
+                        remaining = len(sub_ids) - done
+                        yield log(f"[{ts_now}] Still waiting... {done}/{len(sub_ids)} subscriptions done, {remaining} pending ({elapsed}s elapsed)")
+
                     yield evt({"type": "ping"})
+
+                    # Hard timeout - don't hang forever
+                    if elapsed > MAX_TOTAL_WAIT:
+                        ts_now = __import__('datetime').datetime.now().strftime('%H:%M:%S')
+                        yield log(f"[{ts_now}] ⚠️ Scan timeout after {elapsed}s. Showing partial results.")
+                        yield evt({"type": "error", "data": {
+                            "subscription_id": "timeout",
+                            "subscription_name": "Timeout",
+                            "error": f"Scan timed out after {elapsed}s"
+                        }, "completed": done, "total": len(sub_ids)})
+                        break
+
                     # Drain logs on ping too
                     while not log_q.empty():
                         try:
