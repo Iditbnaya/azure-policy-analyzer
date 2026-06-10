@@ -295,33 +295,38 @@ def scan_stream_route(scan_id):
                 recommender = PolicyRecommender()
 
                 # Per-call timeout: if any Azure API call hangs, fail after 90s
+                # IMPORTANT: do NOT use 'with ThreadPoolExecutor() as ex:' context manager
+                # because __exit__ calls shutdown(wait=True) which blocks until ALL futures
+                # complete - defeating the per-call timeout entirely.
                 CALL_TIMEOUT = 90
-
-                with ThreadPoolExecutor(max_workers=4) as ex:
-                    f_comp   = ex.submit(fetcher.get_compliance_summary, sid)
-                    f_ov     = ex.submit(fetcher.get_compliance_overview, sid)
-                    f_custom = ex.submit(fetcher.get_custom_policies, sid)
-                    f_assign = ex.submit(fetcher.get_policy_assignments, sid)
-                    try:
-                        compliance       = f_comp.result(timeout=CALL_TIMEOUT)
-                    except Exception as e:
-                        log_q.put(f"[{ts()}] [{sname}] [WARN] compliance timed out/failed: {e}")
-                        compliance = []
-                    try:
-                        overview         = f_ov.result(timeout=CALL_TIMEOUT)
-                    except Exception as e:
-                        log_q.put(f"[{ts()}] [{sname}] [WARN] overview timed out/failed: {e}")
-                        overview = {}
-                    try:
-                        custom_policies  = f_custom.result(timeout=CALL_TIMEOUT)
-                    except Exception as e:
-                        log_q.put(f"[{ts()}] [{sname}] [WARN] custom policies timed out/failed: {e}")
-                        custom_policies = []
-                    try:
-                        assignments      = f_assign.result(timeout=CALL_TIMEOUT)
-                    except Exception as e:
-                        log_q.put(f"[{ts()}] [{sname}] [WARN] assignments timed out/failed: {e}")
-                        assignments = []
+                _ex = ThreadPoolExecutor(max_workers=4)
+                f_comp   = _ex.submit(fetcher.get_compliance_summary, sid)
+                f_ov     = _ex.submit(fetcher.get_compliance_overview, sid)
+                f_custom = _ex.submit(fetcher.get_custom_policies, sid)
+                f_assign = _ex.submit(fetcher.get_policy_assignments, sid)
+                try:
+                    compliance       = f_comp.result(timeout=CALL_TIMEOUT)
+                except Exception as e:
+                    log_q.put(f"[{ts()}] [{sname}] [WARN] compliance timed out/failed: {e}")
+                    compliance = []
+                try:
+                    overview         = f_ov.result(timeout=CALL_TIMEOUT)
+                except Exception as e:
+                    log_q.put(f"[{ts()}] [{sname}] [WARN] overview timed out/failed: {e}")
+                    overview = {}
+                try:
+                    custom_policies  = f_custom.result(timeout=CALL_TIMEOUT)
+                except Exception as e:
+                    log_q.put(f"[{ts()}] [{sname}] [WARN] custom policies timed out/failed: {e}")
+                    custom_policies = []
+                try:
+                    assignments      = f_assign.result(timeout=CALL_TIMEOUT)
+                except Exception as e:
+                    log_q.put(f"[{ts()}] [{sname}] [WARN] assignments timed out/failed: {e}")
+                    assignments = []
+                finally:
+                    # Don't wait for any still-running calls - let them die in the background
+                    _ex.shutdown(wait=False)
 
                 log_q.put(f"[{ts()}] [{sname}] Found {len(compliance)} non-compliant assignments, {len(custom_policies)} custom policies, {len(assignments)} assignments")
 
@@ -387,12 +392,14 @@ def scan_stream_route(scan_id):
         scan_start = _time.time()
         ping_count = 0
 
-        with ThreadPoolExecutor(max_workers=n_workers) as ex:
-            for sid in sub_ids:
-                ex.submit(worker, sid)
+        # Use shutdown(wait=False) so the generator can complete even if workers hang
+        _outer_ex = ThreadPoolExecutor(max_workers=n_workers)
+        for sid in sub_ids:
+            _outer_ex.submit(worker, sid)
+        _outer_ex.shutdown(wait=False)  # Don't block - results arrive via result_q
 
-            done = 0
-            while done < len(sub_ids):
+        done = 0
+        while done < len(sub_ids):
                 # Drain log queue first
                 while not log_q.empty():
                     try:
