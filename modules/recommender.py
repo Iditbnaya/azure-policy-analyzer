@@ -238,9 +238,29 @@ class PolicyRecommender:
             and "[deprecated]" not in b.get("display_name", "").lower()
         ]
 
+        # Performance: limit to top 50 most problematic policies (errors first)
+        # With 260 policies × 3600 builtins = 936,000 comparisons which is too slow
+        ORDER = {"error": 0, "warning": 1, "info": 2, "ok": 3}
+        sorted_policies = sorted(
+            problematic_policies,
+            key=lambda p: (ORDER.get(p.get("severity", "ok"), 3),
+                           -((p.get("issue_count") or 0) + (p.get("warning_count") or 0)))
+        )
+        policies_to_match = sorted_policies[:50]
+
+        # Pre-build operation index for O(1) operation lookup
+        # Instead of comparing every policy against all 3600 built-ins,
+        # only compare against built-ins that share the same operation family
+        op_index: dict = {}
+        for b in active_builtins:
+            op = b.get("operation", "unknown")
+            if op not in op_index:
+                op_index[op] = []
+            op_index[op].append(b)
+
         recommendations = []
-        for policy in problematic_policies:
-            matches = self._find_matches(policy, active_builtins)
+        for policy in policies_to_match:
+            matches = self._find_matches_indexed(policy, active_builtins, op_index)
             if matches:
                 recommendations.append({
                     "custom_policy": {
@@ -255,6 +275,48 @@ class PolicyRecommender:
                     "matches": matches[:5],
                 })
         return recommendations
+
+    def _find_matches_indexed(self, custom: dict, all_builtins: list, op_index: dict) -> list:
+        """
+        Fast matching using operation index.
+        Only compares the custom policy against built-ins with the same or related operation,
+        plus a small sample of the full list for fallback.
+        """
+        rule = custom.get("policy_rule") or {}
+        op = _extract_operation(rule)
+        operation = op["operation"]
+
+        # Build candidate set: same operation + related operations + small general sample
+        candidates = set()
+        same_op = op_index.get(operation, [])
+        candidates.update(id(b) for b in same_op)
+
+        # Add related operation family (e.g. tag_add + tag_inherit_from_rg + tag_audit)
+        op_family = operation.split("_")[0] if "_" in operation else operation
+        for op_key, builtins_list in op_index.items():
+            if op_key.startswith(op_family) and op_key != operation:
+                candidates.update(id(b) for b in builtins_list[:20])
+
+        # Always include a category-filtered sample for fallback
+        c_cat = custom.get("category", "").lower()
+        if c_cat:
+            for b in all_builtins:
+                if b.get("category", "").lower() == c_cat:
+                    candidates.add(id(b))
+
+        # Build final candidate list
+        id_to_builtin = {id(b): b for b in all_builtins}
+        candidate_list = [id_to_builtin[i] for i in candidates if i in id_to_builtin]
+
+        # If very few candidates, add a broader sample
+        if len(candidate_list) < 30:
+            candidate_list = all_builtins[:200]
+
+        # Cap candidate list to avoid slow loops
+        if len(candidate_list) > 500:
+            candidate_list = candidate_list[:500]
+
+        return self._find_matches(custom, candidate_list)
 
     def _find_matches(self, custom: dict, builtins: list) -> list:
         # Extract semantic operation from the custom policy rule
