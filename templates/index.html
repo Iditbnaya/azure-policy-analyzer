@@ -886,6 +886,277 @@ function toggleDismiss(policyId, btn) {
   if (lbl) lbl.textContent = `${total} policies`;
 }
 
+
+// =====================================================================
+// Projects / Migration Tracker
+// =====================================================================
+const PROJECTS_KEY = 'apa_projects_v2';
+
+function getProjects() {
+  try { return JSON.parse(localStorage.getItem(PROJECTS_KEY)||'[]'); }
+  catch { return []; }
+}
+
+function saveProjects(projects) {
+  localStorage.setItem(PROJECTS_KEY, JSON.stringify(projects));
+}
+
+function showNewProjectForm() {
+  document.getElementById('new-proj-form').classList.remove('hidden');
+  document.getElementById('new-proj-name').focus();
+}
+function hideNewProjectForm() {
+  document.getElementById('new-proj-form').classList.add('hidden');
+  ['new-proj-name','new-proj-desc','new-proj-date'].forEach(id => {
+    document.getElementById(id).value = '';
+  });
+  document.getElementById('new-proj-priority').value = 'medium';
+}
+
+const PROJECT_TEMPLATES = {
+  mcsb: {
+    name: 'Adopt Microsoft Cloud Security Benchmark',
+    desc: 'Assign MCSB initiative and bring all subscriptions to compliance',
+    priority: 'high',
+    tasks: [
+      {title: 'Review MCSB initiative scope and requirements', type: 'review'},
+      {title: 'Assign MCSB initiative in Audit mode to target subscriptions', type: 'assign'},
+      {title: 'Review non-compliant resources in Audit phase (30 days)', type: 'monitor'},
+      {title: 'Identify exceptions and create exemptions where needed', type: 'review'},
+      {title: 'Upgrade enforcement mode to Default after review', type: 'action'},
+      {title: 'Set up monthly compliance review meeting', type: 'governance'},
+      {title: 'Remove redundant custom policies covered by MCSB', type: 'cleanup'},
+    ]
+  },
+  custom_cleanup: {
+    name: 'Clean up Custom Policy Definitions',
+    desc: 'Replace custom policies with built-in equivalents to reduce maintenance',
+    priority: 'medium',
+    tasks: [
+      {title: 'Run Azure Policy Analyzer scan on all subscriptions', type: 'action'},
+      {title: 'Review Built-in Replacements recommendations', type: 'review'},
+      {title: 'Dismiss custom policies that intentionally cannot be replaced', type: 'action'},
+      {title: 'Apply Auto Fix for top 5 policies with non-compliant resources', type: 'action'},
+      {title: 'Verify new built-in assignments produce same compliance results', type: 'verify'},
+      {title: 'Delete original custom policy definitions after validation', type: 'cleanup'},
+    ]
+  },
+  audit_to_deny: {
+    name: 'Audit → Deny Migration',
+    desc: 'Graduate all Audit policies to Deny after 30-day observation period',
+    priority: 'high',
+    tasks: [
+      {title: 'Identify all Audit-mode assignments using the Insights tab', type: 'review'},
+      {title: 'Document current non-compliant resource count as baseline', type: 'review'},
+      {title: 'Wait 30 days - monitor Insights Audit→Deny Tracker', type: 'monitor'},
+      {title: 'Create exemptions for legitimate non-compliant resources', type: 'action'},
+      {title: 'Use Audit→Deny Tracker to upgrade ready assignments', type: 'action'},
+      {title: 'Verify no production impact after switching to Deny', type: 'verify'},
+    ]
+  },
+  tagging: {
+    name: 'Tagging Governance Implementation',
+    desc: 'Enforce consistent tagging across all resources',
+    priority: 'medium',
+    tasks: [
+      {title: 'Define mandatory tag taxonomy (Environment, CostCenter, Owner)', type: 'review'},
+      {title: 'Assign "Require tag on resource groups" policy for each tag', type: 'assign'},
+      {title: 'Assign "Inherit tag from resource group" for automatic propagation', type: 'assign'},
+      {title: 'Remediate existing resources missing tags', type: 'action'},
+      {title: 'Replace custom tag policies with built-in equivalents', type: 'cleanup'},
+      {title: 'Review compliance after 2 weeks', type: 'monitor'},
+    ]
+  },
+};
+
+function useTemplate(templateKey) {
+  const t = PROJECT_TEMPLATES[templateKey];
+  if (!t) return;
+  document.getElementById('new-proj-name').value = t.name;
+  document.getElementById('new-proj-desc').value = t.desc;
+  document.getElementById('new-proj-priority').value = t.priority;
+}
+
+function createProject() {
+  const name = document.getElementById('new-proj-name').value.trim();
+  if (!name) { alert('Please enter a project name.'); return; }
+
+  const templateKey = Object.keys(PROJECT_TEMPLATES).find(k =>
+    PROJECT_TEMPLATES[k].name === name
+  );
+  const templateTasks = templateKey ? PROJECT_TEMPLATES[templateKey].tasks.map((t,i) => ({
+    id: Date.now() + i,
+    title: t.title,
+    type: t.type || 'action',
+    status: 'todo',
+    notes: '',
+    created: new Date().toISOString(),
+    link: '',
+  })) : [];
+
+  const project = {
+    id: 'proj-' + Date.now(),
+    name,
+    desc: document.getElementById('new-proj-desc').value.trim(),
+    priority: document.getElementById('new-proj-priority').value,
+    target_date: document.getElementById('new-proj-date').value,
+    created: new Date().toISOString(),
+    tasks: templateTasks,
+    status: 'active',
+  };
+
+  const projects = getProjects();
+  projects.unshift(project);
+  saveProjects(projects);
+  hideNewProjectForm();
+  renderProjects();
+}
+
+function deleteProject(id) {
+  if (!confirm('Delete this project and all its tasks?')) return;
+  saveProjects(getProjects().filter(p => p.id !== id));
+  renderProjects();
+}
+
+function addTask(projId) {
+  const input = document.getElementById('task-input-' + projId);
+  const title = input?.value?.trim();
+  if (!title) return;
+  const projects = getProjects();
+  const proj = projects.find(p => p.id === projId);
+  if (!proj) return;
+  proj.tasks.push({
+    id: Date.now(),
+    title,
+    type: 'action',
+    status: 'todo',
+    notes: '',
+    created: new Date().toISOString(),
+    link: '',
+  });
+  saveProjects(projects);
+  input.value = '';
+  renderProjects();
+}
+
+function setTaskStatus(projId, taskId, status) {
+  const projects = getProjects();
+  const proj = projects.find(p => p.id === projId);
+  if (!proj) return;
+  const task = proj.tasks.find(t => t.id === taskId);
+  if (!task) return;
+  task.status = status;
+  if (status === 'done') task.completed = new Date().toISOString();
+  saveProjects(projects);
+  renderProjects();
+}
+
+function deleteTask(projId, taskId) {
+  const projects = getProjects();
+  const proj = projects.find(p => p.id === projId);
+  if (!proj) return;
+  proj.tasks = proj.tasks.filter(t => t.id !== taskId);
+  saveProjects(projects);
+  renderProjects();
+}
+
+function renderProjects() {
+  if (document.getElementById('tc-projects')?.classList?.contains('active') === false) return;
+  const el = document.getElementById('projects-list');
+  if (!el) return;
+  const projects = getProjects();
+  if (!projects.length) {
+    el.innerHTML = '<div class="empty"><div class="empty-icon">📋</div><p>No projects yet. Create one to start tracking your policy migration work.</p></div>';
+    return;
+  }
+
+  el.innerHTML = projects.map(proj => {
+    const tasks = proj.tasks || [];
+    const done = tasks.filter(t => t.status === 'done').length;
+    const inProgress = tasks.filter(t => t.status === 'in-progress').length;
+    const pct = tasks.length ? Math.round(100 * done / tasks.length) : 0;
+    const barColor = pct >= 80 ? '#107c10' : pct >= 50 ? '#0078d4' : '#f7c300';
+    const priCls = proj.priority === 'high' ? 'p-high' : proj.priority === 'low' ? 'p-low' : 'p-medium';
+    const priLabel = proj.priority === 'high' ? 'HIGH' : proj.priority === 'low' ? 'LOW' : 'MEDIUM';
+
+    const daysLeft = proj.target_date
+      ? Math.ceil((new Date(proj.target_date) - new Date()) / 86400000)
+      : null;
+    const dueSoon = daysLeft !== null && daysLeft <= 7 && daysLeft >= 0;
+    const overdue = daysLeft !== null && daysLeft < 0;
+
+    return `<div class="proj-card">
+      <div class="proj-hdr">
+        <div style="flex:1">
+          <div class="proj-title">
+            ${esc(proj.name)}
+            <span class="priority-badge ${priCls}" style="margin-left:8px;font-size:.68rem">${priLabel}</span>
+            ${inProgress>0?`<span class="badge b-info" style="margin-left:6px;font-size:.68rem">${inProgress} in progress</span>`:''}
+          </div>
+          <div class="proj-meta">
+            ${proj.desc?esc(proj.desc)+'  •  ':''}
+            Created ${new Date(proj.created).toLocaleDateString()}
+            ${daysLeft !== null ? `  •  <span style="color:${overdue?'#a4262c':dueSoon?'#7a4100':'#605e5c'};font-weight:${overdue||dueSoon?'700':'400'}">${overdue?'Overdue by '+Math.abs(daysLeft)+' days':daysLeft===0?'Due today':'Due in '+daysLeft+' days'}</span>` : ''}
+          </div>
+        </div>
+        <div class="proj-progress-wrap">
+          <div style="display:flex;justify-content:space-between;font-size:.78rem">
+            <span style="color:#605e5c">${done}/${tasks.length} tasks</span>
+            <span style="font-weight:700;color:${barColor}">${pct}%</span>
+          </div>
+          <div class="proj-progress-bar"><div class="proj-progress-fill" style="width:${pct}%;background:${barColor}"></div></div>
+        </div>
+        <button onclick="deleteProject('${proj.id}')" style="background:none;border:none;color:#8a8886;cursor:pointer;font-size:1rem;padding:0 4px" title="Delete project">🗑</button>
+      </div>
+      <div class="proj-body">
+        ${tasks.map(task => {
+          const chkClass = task.status === 'done' ? 'done' : task.status === 'in-progress' ? 'in-progress' : '';
+          const chkIcon = task.status === 'done' ? '✓' : task.status === 'in-progress' ? '…' : '';
+          const typeIcon = {review:'🔍',assign:'📌',monitor:'👁',action:'⚡',verify:'✅',cleanup:'🧹',governance:'📐'}[task.type]||'📝';
+          return `<div class="task-item">
+            <div class="task-check ${chkClass}" onclick="cycleTaskStatus('${proj.id}',${task.id})" title="Click to cycle status">${chkIcon}</div>
+            <div style="flex:1">
+              <div class="task-title ${task.status==='done'?'done-text':''}">${typeIcon} ${esc(task.title)}</div>
+              ${task.status==='done'&&task.completed?`<div style="font-size:.72rem;color:#8a8886">Completed ${new Date(task.completed).toLocaleDateString()}</div>`:''}
+            </div>
+            <select class="task-status-sel" onchange="setTaskStatus('${proj.id}',${task.id},this.value)" onclick="event.stopPropagation()">
+              <option value="todo" ${task.status==='todo'?'selected':''}>To Do</option>
+              <option value="in-progress" ${task.status==='in-progress'?'selected':''}>In Progress</option>
+              <option value="done" ${task.status==='done'?'selected':''}>Done</option>
+            </select>
+            <button onclick="deleteTask('${proj.id}',${task.id})" style="background:none;border:none;color:#c8c6c4;cursor:pointer;font-size:.9rem;padding:0 4px" title="Remove task">✕</button>
+          </div>`;
+        }).join('')}
+        <div style="display:flex;gap:8px;margin-top:10px;align-items:center">
+          <input id="task-input-${proj.id}" class="inp" type="text" placeholder="Add a task..." style="flex:1;font-size:.82rem" onkeydown="if(event.key==='Enter')addTask('${proj.id}')">
+          <button class="btn btn-primary btn-sm" onclick="addTask('${proj.id}')">Add</button>
+        </div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function cycleTaskStatus(projId, taskId) {
+  const projects = getProjects();
+  const proj = projects.find(p => p.id === projId);
+  if (!proj) return;
+  const task = proj.tasks.find(t => t.id === taskId);
+  if (!task) return;
+  const cycle = {todo: 'in-progress', 'in-progress': 'done', done: 'todo'};
+  task.status = cycle[task.status] || 'todo';
+  if (task.status === 'done') task.completed = new Date().toISOString();
+  else delete task.completed;
+  saveProjects(projects);
+  renderProjects();
+}
+
+// Auto-render when switching to projects tab
+const _origShowTab = showTab;
+function showTab(name) {
+  _origShowTab(name);
+  if (name === 'projects') renderProjects();
+}
+
 </script>
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
@@ -1027,6 +1298,32 @@ tr.clickable{cursor:pointer}tr.clickable:hover td{background:#faf9f8}
 .step-done-ico{color:#107c10}
 .step-active-ico{color:#0078d4}
 .step-pending-ico{color:#8a8886}
+/* Projects tab */
+.proj-card{border:1px solid #edebe9;border-radius:10px;margin-bottom:18px;overflow:hidden;transition:box-shadow .15s}
+.proj-card:hover{box-shadow:0 4px 14px rgba(0,0,0,.10)}
+.proj-hdr{padding:16px 20px;background:#faf9f8;border-bottom:1px solid #edebe9;display:flex;align-items:center;justify-content:space-between;gap:12px}
+.proj-title{font-size:1rem;font-weight:700;color:#1f1f1f;flex:1}
+.proj-meta{font-size:.78rem;color:#605e5c;margin-top:3px}
+.proj-progress-wrap{width:180px;flex-shrink:0}
+.proj-progress-bar{height:8px;background:#edebe9;border-radius:4px;overflow:hidden;margin-top:5px}
+.proj-progress-fill{height:100%;border-radius:4px;transition:width .6s}
+.proj-body{padding:16px 20px}
+.task-item{display:flex;align-items:flex-start;gap:12px;padding:10px 0;border-bottom:1px solid #f3f2f1}
+.task-item:last-child{border-bottom:none}
+.task-check{width:18px;height:18px;border-radius:50%;border:2px solid #c8c6c4;background:#fff;flex-shrink:0;cursor:pointer;display:flex;align-items:center;justify-content:center;margin-top:1px;transition:all .15s}
+.task-check.done{background:#107c10;border-color:#107c10;color:#fff}
+.task-check.in-progress{background:#0078d4;border-color:#0078d4;color:#fff}
+.task-title{font-size:.875rem;flex:1}
+.task-title.done-text{text-decoration:line-through;color:#8a8886}
+.task-status-sel{font-size:.78rem;border:1px solid #edebe9;border-radius:4px;padding:2px 6px;background:#fff;cursor:pointer}
+.proj-add-btn{background:#f3f9ff;border:1px dashed #0078d4;color:#0078d4;border-radius:6px;padding:8px;width:100%;text-align:center;cursor:pointer;font-size:.82rem;margin-top:8px}
+.proj-add-btn:hover{background:#dce9f8}
+.new-proj-form{background:#faf9f8;border:1px solid #edebe9;border-radius:10px;padding:20px;margin-bottom:18px}
+.form-inline{display:grid;grid-template-columns:1fr 1fr auto;gap:12px;align-items:end}
+.priority-badge{padding:2px 8px;border-radius:3px;font-size:.72rem;font-weight:700}
+.p-high{background:#fde7e9;color:#a4262c}
+.p-medium{background:#fff4ce;color:#7a4100}
+.p-low{background:#dff6dd;color:#107c10}
 .btn-dismiss{background:none;border:1px solid #c8c6c4;color:#605e5c;padding:3px 10px;border-radius:4px;font-size:.75rem;cursor:pointer;transition:all .15s}
 .btn-dismiss:hover{background:#fde7e9;border-color:#f1707b;color:#a4262c}
 .btn-undismiss{background:#f3f2f1;border:1px solid #c8c6c4;color:#605e5c;padding:3px 10px;border-radius:4px;font-size:.75rem;cursor:pointer}
@@ -1164,6 +1461,7 @@ tr.clickable{cursor:pointer}tr.clickable:hover td{background:#faf9f8}
       <div class="tab active" id="tab-btn-dashboard" onclick="showTab('dashboard')">📊 Dashboard</div>
       <div class="tab" id="tab-btn-recs" onclick="showTab('recs')">🔄 Built-in Replacements <span class="tab-badge" id="tbadge-recs">0</span></div>
       <div class="tab" id="tab-btn-agent" onclick="showTab('agent')">🤖 Policy Agent</div>
+      <div class="tab" id="tab-btn-projects" onclick="showTab('projects')">📋 Projects</div>
       <div class="tab" id="tab-btn-insights" onclick="showTab('insights')">🔎 Insights <span class="tab-badge" id="tbadge-insights">0</span></div>
       <div class="tab" id="tab-btn-insights" onclick="showTab('insights')">🔎 Insights <span class="tab-badge" id="tbadge-insights">0</span></div>
     </div>
@@ -1299,6 +1597,67 @@ tr.clickable{cursor:pointer}tr.clickable:hover td{background:#faf9f8}
           <a href="https://portal.azure.com/#view/Microsoft_Azure_Policy/PolicyMenuBlade/~/Compliance" target="_blank" style="font-size:.78rem;color:#0078d4;font-weight:400">View all in Portal ↗</a>
         </div>
         <div id="dashboard-noncompliant"></div>
+      </div>
+    </div>
+
+
+    <!-- PROJECTS TAB -->
+    <div class="tc" id="tc-projects">
+      <div class="card">
+        <div class="card-title" style="display:flex;align-items:center;justify-content:space-between">
+          📋 Policy Migration Projects
+          <button class="btn btn-primary btn-sm" onclick="showNewProjectForm()">+ New Project</button>
+        </div>
+        <p class="muted" style="font-size:.84rem;margin-bottom:18px">
+          Track your policy migration work - migrating custom policies to built-in, assigning initiatives, fixing compliance issues.
+          Projects are saved locally in your browser.
+        </p>
+
+        <!-- New project form (hidden by default) -->
+        <div class="new-proj-form hidden" id="new-proj-form">
+          <div style="font-weight:700;font-size:.9rem;margin-bottom:14px">New Project</div>
+          <div class="form-inline" style="margin-bottom:12px">
+            <div>
+              <label class="lbl">Project name</label>
+              <input id="new-proj-name" class="inp" type="text" placeholder="e.g. Migrate to MCSB">
+            </div>
+            <div>
+              <label class="lbl">Target date (optional)</label>
+              <input id="new-proj-date" class="inp" type="date">
+            </div>
+            <div>
+              <label class="lbl">Priority</label>
+              <select id="new-proj-priority" class="inp">
+                <option value="high">High</option>
+                <option value="medium" selected>Medium</option>
+                <option value="low">Low</option>
+              </select>
+            </div>
+          </div>
+          <div class="form-group">
+            <label class="lbl">Description (optional)</label>
+            <input id="new-proj-desc" class="inp" type="text" placeholder="What are you trying to achieve?">
+          </div>
+          <div style="display:flex;gap:8px;margin-top:12px">
+            <button class="btn btn-primary" onclick="createProject()">Create Project</button>
+            <button class="btn" style="background:#f3f2f1;border:1px solid #c8c6c4;color:#323130" onclick="hideNewProjectForm()">Cancel</button>
+          </div>
+          <!-- Quick start templates -->
+          <div style="margin-top:16px;padding-top:14px;border-top:1px solid #edebe9">
+            <div class="lbl">Quick start from template:</div>
+            <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:6px">
+              <button class="filter-btn" onclick="useTemplate('mcsb')">📦 Adopt MCSB Initiative</button>
+              <button class="filter-btn" onclick="useTemplate('custom_cleanup')">🧹 Clean up Custom Policies</button>
+              <button class="filter-btn" onclick="useTemplate('audit_to_deny')">🎓 Audit → Deny Migration</button>
+              <button class="filter-btn" onclick="useTemplate('tagging')">🏷️ Tagging Governance</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Projects list -->
+        <div id="projects-list">
+          <div class="empty"><div class="empty-icon">📋</div><p>No projects yet. Create one to start tracking your policy migration work.</p></div>
+        </div>
       </div>
     </div>
 
@@ -3390,6 +3749,277 @@ function toggleDismiss(policyId, btn) {
   const total = document.querySelectorAll('#recs-tbl tbody tr.rec-row:not(.dismissed-row)').length;
   const lbl = document.getElementById('recs-count-label');
   if (lbl) lbl.textContent = `${total} policies`;
+}
+
+
+// =====================================================================
+// Projects / Migration Tracker
+// =====================================================================
+const PROJECTS_KEY = 'apa_projects_v2';
+
+function getProjects() {
+  try { return JSON.parse(localStorage.getItem(PROJECTS_KEY)||'[]'); }
+  catch { return []; }
+}
+
+function saveProjects(projects) {
+  localStorage.setItem(PROJECTS_KEY, JSON.stringify(projects));
+}
+
+function showNewProjectForm() {
+  document.getElementById('new-proj-form').classList.remove('hidden');
+  document.getElementById('new-proj-name').focus();
+}
+function hideNewProjectForm() {
+  document.getElementById('new-proj-form').classList.add('hidden');
+  ['new-proj-name','new-proj-desc','new-proj-date'].forEach(id => {
+    document.getElementById(id).value = '';
+  });
+  document.getElementById('new-proj-priority').value = 'medium';
+}
+
+const PROJECT_TEMPLATES = {
+  mcsb: {
+    name: 'Adopt Microsoft Cloud Security Benchmark',
+    desc: 'Assign MCSB initiative and bring all subscriptions to compliance',
+    priority: 'high',
+    tasks: [
+      {title: 'Review MCSB initiative scope and requirements', type: 'review'},
+      {title: 'Assign MCSB initiative in Audit mode to target subscriptions', type: 'assign'},
+      {title: 'Review non-compliant resources in Audit phase (30 days)', type: 'monitor'},
+      {title: 'Identify exceptions and create exemptions where needed', type: 'review'},
+      {title: 'Upgrade enforcement mode to Default after review', type: 'action'},
+      {title: 'Set up monthly compliance review meeting', type: 'governance'},
+      {title: 'Remove redundant custom policies covered by MCSB', type: 'cleanup'},
+    ]
+  },
+  custom_cleanup: {
+    name: 'Clean up Custom Policy Definitions',
+    desc: 'Replace custom policies with built-in equivalents to reduce maintenance',
+    priority: 'medium',
+    tasks: [
+      {title: 'Run Azure Policy Analyzer scan on all subscriptions', type: 'action'},
+      {title: 'Review Built-in Replacements recommendations', type: 'review'},
+      {title: 'Dismiss custom policies that intentionally cannot be replaced', type: 'action'},
+      {title: 'Apply Auto Fix for top 5 policies with non-compliant resources', type: 'action'},
+      {title: 'Verify new built-in assignments produce same compliance results', type: 'verify'},
+      {title: 'Delete original custom policy definitions after validation', type: 'cleanup'},
+    ]
+  },
+  audit_to_deny: {
+    name: 'Audit → Deny Migration',
+    desc: 'Graduate all Audit policies to Deny after 30-day observation period',
+    priority: 'high',
+    tasks: [
+      {title: 'Identify all Audit-mode assignments using the Insights tab', type: 'review'},
+      {title: 'Document current non-compliant resource count as baseline', type: 'review'},
+      {title: 'Wait 30 days - monitor Insights Audit→Deny Tracker', type: 'monitor'},
+      {title: 'Create exemptions for legitimate non-compliant resources', type: 'action'},
+      {title: 'Use Audit→Deny Tracker to upgrade ready assignments', type: 'action'},
+      {title: 'Verify no production impact after switching to Deny', type: 'verify'},
+    ]
+  },
+  tagging: {
+    name: 'Tagging Governance Implementation',
+    desc: 'Enforce consistent tagging across all resources',
+    priority: 'medium',
+    tasks: [
+      {title: 'Define mandatory tag taxonomy (Environment, CostCenter, Owner)', type: 'review'},
+      {title: 'Assign "Require tag on resource groups" policy for each tag', type: 'assign'},
+      {title: 'Assign "Inherit tag from resource group" for automatic propagation', type: 'assign'},
+      {title: 'Remediate existing resources missing tags', type: 'action'},
+      {title: 'Replace custom tag policies with built-in equivalents', type: 'cleanup'},
+      {title: 'Review compliance after 2 weeks', type: 'monitor'},
+    ]
+  },
+};
+
+function useTemplate(templateKey) {
+  const t = PROJECT_TEMPLATES[templateKey];
+  if (!t) return;
+  document.getElementById('new-proj-name').value = t.name;
+  document.getElementById('new-proj-desc').value = t.desc;
+  document.getElementById('new-proj-priority').value = t.priority;
+}
+
+function createProject() {
+  const name = document.getElementById('new-proj-name').value.trim();
+  if (!name) { alert('Please enter a project name.'); return; }
+
+  const templateKey = Object.keys(PROJECT_TEMPLATES).find(k =>
+    PROJECT_TEMPLATES[k].name === name
+  );
+  const templateTasks = templateKey ? PROJECT_TEMPLATES[templateKey].tasks.map((t,i) => ({
+    id: Date.now() + i,
+    title: t.title,
+    type: t.type || 'action',
+    status: 'todo',
+    notes: '',
+    created: new Date().toISOString(),
+    link: '',
+  })) : [];
+
+  const project = {
+    id: 'proj-' + Date.now(),
+    name,
+    desc: document.getElementById('new-proj-desc').value.trim(),
+    priority: document.getElementById('new-proj-priority').value,
+    target_date: document.getElementById('new-proj-date').value,
+    created: new Date().toISOString(),
+    tasks: templateTasks,
+    status: 'active',
+  };
+
+  const projects = getProjects();
+  projects.unshift(project);
+  saveProjects(projects);
+  hideNewProjectForm();
+  renderProjects();
+}
+
+function deleteProject(id) {
+  if (!confirm('Delete this project and all its tasks?')) return;
+  saveProjects(getProjects().filter(p => p.id !== id));
+  renderProjects();
+}
+
+function addTask(projId) {
+  const input = document.getElementById('task-input-' + projId);
+  const title = input?.value?.trim();
+  if (!title) return;
+  const projects = getProjects();
+  const proj = projects.find(p => p.id === projId);
+  if (!proj) return;
+  proj.tasks.push({
+    id: Date.now(),
+    title,
+    type: 'action',
+    status: 'todo',
+    notes: '',
+    created: new Date().toISOString(),
+    link: '',
+  });
+  saveProjects(projects);
+  input.value = '';
+  renderProjects();
+}
+
+function setTaskStatus(projId, taskId, status) {
+  const projects = getProjects();
+  const proj = projects.find(p => p.id === projId);
+  if (!proj) return;
+  const task = proj.tasks.find(t => t.id === taskId);
+  if (!task) return;
+  task.status = status;
+  if (status === 'done') task.completed = new Date().toISOString();
+  saveProjects(projects);
+  renderProjects();
+}
+
+function deleteTask(projId, taskId) {
+  const projects = getProjects();
+  const proj = projects.find(p => p.id === projId);
+  if (!proj) return;
+  proj.tasks = proj.tasks.filter(t => t.id !== taskId);
+  saveProjects(projects);
+  renderProjects();
+}
+
+function renderProjects() {
+  if (document.getElementById('tc-projects')?.classList?.contains('active') === false) return;
+  const el = document.getElementById('projects-list');
+  if (!el) return;
+  const projects = getProjects();
+  if (!projects.length) {
+    el.innerHTML = '<div class="empty"><div class="empty-icon">📋</div><p>No projects yet. Create one to start tracking your policy migration work.</p></div>';
+    return;
+  }
+
+  el.innerHTML = projects.map(proj => {
+    const tasks = proj.tasks || [];
+    const done = tasks.filter(t => t.status === 'done').length;
+    const inProgress = tasks.filter(t => t.status === 'in-progress').length;
+    const pct = tasks.length ? Math.round(100 * done / tasks.length) : 0;
+    const barColor = pct >= 80 ? '#107c10' : pct >= 50 ? '#0078d4' : '#f7c300';
+    const priCls = proj.priority === 'high' ? 'p-high' : proj.priority === 'low' ? 'p-low' : 'p-medium';
+    const priLabel = proj.priority === 'high' ? 'HIGH' : proj.priority === 'low' ? 'LOW' : 'MEDIUM';
+
+    const daysLeft = proj.target_date
+      ? Math.ceil((new Date(proj.target_date) - new Date()) / 86400000)
+      : null;
+    const dueSoon = daysLeft !== null && daysLeft <= 7 && daysLeft >= 0;
+    const overdue = daysLeft !== null && daysLeft < 0;
+
+    return `<div class="proj-card">
+      <div class="proj-hdr">
+        <div style="flex:1">
+          <div class="proj-title">
+            ${esc(proj.name)}
+            <span class="priority-badge ${priCls}" style="margin-left:8px;font-size:.68rem">${priLabel}</span>
+            ${inProgress>0?`<span class="badge b-info" style="margin-left:6px;font-size:.68rem">${inProgress} in progress</span>`:''}
+          </div>
+          <div class="proj-meta">
+            ${proj.desc?esc(proj.desc)+'  •  ':''}
+            Created ${new Date(proj.created).toLocaleDateString()}
+            ${daysLeft !== null ? `  •  <span style="color:${overdue?'#a4262c':dueSoon?'#7a4100':'#605e5c'};font-weight:${overdue||dueSoon?'700':'400'}">${overdue?'Overdue by '+Math.abs(daysLeft)+' days':daysLeft===0?'Due today':'Due in '+daysLeft+' days'}</span>` : ''}
+          </div>
+        </div>
+        <div class="proj-progress-wrap">
+          <div style="display:flex;justify-content:space-between;font-size:.78rem">
+            <span style="color:#605e5c">${done}/${tasks.length} tasks</span>
+            <span style="font-weight:700;color:${barColor}">${pct}%</span>
+          </div>
+          <div class="proj-progress-bar"><div class="proj-progress-fill" style="width:${pct}%;background:${barColor}"></div></div>
+        </div>
+        <button onclick="deleteProject('${proj.id}')" style="background:none;border:none;color:#8a8886;cursor:pointer;font-size:1rem;padding:0 4px" title="Delete project">🗑</button>
+      </div>
+      <div class="proj-body">
+        ${tasks.map(task => {
+          const chkClass = task.status === 'done' ? 'done' : task.status === 'in-progress' ? 'in-progress' : '';
+          const chkIcon = task.status === 'done' ? '✓' : task.status === 'in-progress' ? '…' : '';
+          const typeIcon = {review:'🔍',assign:'📌',monitor:'👁',action:'⚡',verify:'✅',cleanup:'🧹',governance:'📐'}[task.type]||'📝';
+          return `<div class="task-item">
+            <div class="task-check ${chkClass}" onclick="cycleTaskStatus('${proj.id}',${task.id})" title="Click to cycle status">${chkIcon}</div>
+            <div style="flex:1">
+              <div class="task-title ${task.status==='done'?'done-text':''}">${typeIcon} ${esc(task.title)}</div>
+              ${task.status==='done'&&task.completed?`<div style="font-size:.72rem;color:#8a8886">Completed ${new Date(task.completed).toLocaleDateString()}</div>`:''}
+            </div>
+            <select class="task-status-sel" onchange="setTaskStatus('${proj.id}',${task.id},this.value)" onclick="event.stopPropagation()">
+              <option value="todo" ${task.status==='todo'?'selected':''}>To Do</option>
+              <option value="in-progress" ${task.status==='in-progress'?'selected':''}>In Progress</option>
+              <option value="done" ${task.status==='done'?'selected':''}>Done</option>
+            </select>
+            <button onclick="deleteTask('${proj.id}',${task.id})" style="background:none;border:none;color:#c8c6c4;cursor:pointer;font-size:.9rem;padding:0 4px" title="Remove task">✕</button>
+          </div>`;
+        }).join('')}
+        <div style="display:flex;gap:8px;margin-top:10px;align-items:center">
+          <input id="task-input-${proj.id}" class="inp" type="text" placeholder="Add a task..." style="flex:1;font-size:.82rem" onkeydown="if(event.key==='Enter')addTask('${proj.id}')">
+          <button class="btn btn-primary btn-sm" onclick="addTask('${proj.id}')">Add</button>
+        </div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function cycleTaskStatus(projId, taskId) {
+  const projects = getProjects();
+  const proj = projects.find(p => p.id === projId);
+  if (!proj) return;
+  const task = proj.tasks.find(t => t.id === taskId);
+  if (!task) return;
+  const cycle = {todo: 'in-progress', 'in-progress': 'done', done: 'todo'};
+  task.status = cycle[task.status] || 'todo';
+  if (task.status === 'done') task.completed = new Date().toISOString();
+  else delete task.completed;
+  saveProjects(projects);
+  renderProjects();
+}
+
+// Auto-render when switching to projects tab
+const _origShowTab = showTab;
+function showTab(name) {
+  _origShowTab(name);
+  if (name === 'projects') renderProjects();
 }
 
 </script>
