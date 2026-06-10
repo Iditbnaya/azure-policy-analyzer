@@ -1,0 +1,24 @@
+name: SAST - Bandit
+
+on:
+  push:
+  workflow_dispatch:
+
+jobs:
+  bandit:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install Bandit
+        run: pip install bandit
+
+      - name: Run Bandit SAST scan
+        run: bandit -r app.py modules scripts

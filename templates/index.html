@@ -1371,6 +1371,48 @@ tr.clickable{cursor:pointer}tr.clickable:hover td{background:#faf9f8}
 .match-selector-item:hover{border-color:#0078d4;background:#f0f7ff}
 .match-selector-item.selected{border-color:#0078d4;background:#f0f7ff}
 </style>
+<script>
+// Minimal markdown renderer - no eval(), no new Function(), no CDN dependency
+const marked = {
+  parse: function(src) {
+    if (!src) return '';
+    let html = src
+      // Escape HTML first
+      .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+      // Code blocks (must be before inline code)
+      .replace(/```([\s\S]*?)```/g, function(m, code) {
+        return '<pre><code>' + code.trim() + '</code></pre>';
+      })
+      // Inline code
+      .replace(/`([^`]+)`/g, '<code>$1</code>')
+      // Headers
+      .replace(/^### (.+)$/gm, '<h3>$1</h3>')
+      .replace(/^## (.+)$/gm, '<h2>$1</h2>')
+      .replace(/^# (.+)$/gm, '<h1>$1</h1>')
+      // Bold
+      .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
+      .replace(/__([^_]+)__/g, '<strong>$1</strong>')
+      // Italic
+      .replace(/\*([^*]+)\*/g, '<em>$1</em>')
+      .replace(/_([^_]+)_/g, '<em>$1</em>')
+      // Unordered lists
+      .replace(/^[\*\-] (.+)$/gm, '<li>$1</li>')
+      // Ordered lists
+      .replace(/^\d+\. (.+)$/gm, '<li>$1</li>')
+      // Links
+      .replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank">$1</a>')
+      // Line breaks (double newline = paragraph break)
+      .replace(/\n\n/g, '</p><p>')
+      // Single newline = <br>
+      .replace(/\n/g, '<br>');
+    // Wrap consecutive <li> in <ul>
+    html = html.replace(/(<li>.*?<\/li>(<br>)?)+/gs, function(m) {
+      return '<ul>' + m.replace(/<br>/g, '') + '</ul>';
+    });
+    return '<p>' + html + '</p>';
+  }
+};
+</script>
 </head>
 <body>
 

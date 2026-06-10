@@ -18,6 +18,27 @@ import modules.policy_cache as policy_cache
 app = Flask(__name__)
 app.secret_key = str(uuid.uuid4())
 
+
+@app.after_request
+def add_security_headers(response):
+    """Add security headers to all responses."""
+    # CSP: no eval(), no inline scripts except what we explicitly allow
+    # 'self' for scripts/styles, portal.azure.com for links (navigated, not loaded)
+    csp = (
+        "default-src 'self'; "
+        "script-src 'self' 'unsafe-inline'; "  # unsafe-inline needed for our inline JS blocks
+        "style-src 'self' 'unsafe-inline'; "
+        "img-src 'self' data:; "
+        "connect-src 'self'; "
+        "frame-ancestors 'none';"
+    )
+    response.headers["Content-Security-Policy"] = csp
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["X-Frame-Options"] = "DENY"
+    response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+    return response
+
+
 auth_manager = AuthManager()
 pending_scans = {}       # scan_id -> params
 scan_contexts = {}       # scan_id (reused as session key) -> compact scan summary for agent

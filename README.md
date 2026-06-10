@@ -49,3 +49,14 @@ The signed-in user needs at minimum:
 - `Microsoft.Authorization/policyAssignments/read` - for assignments
 
 These are all included in the built-in **Reader** role.
+
+## Security Scanning (SAST)
+
+This repository includes a GitHub Actions workflow at `.github/workflows/sast-bandit.yml` that runs a Bandit SAST scan on every push.
+
+You can also run the same scan locally:
+
+```bash
+pip install bandit
+bandit -r app.py modules scripts
+```
