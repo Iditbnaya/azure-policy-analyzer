@@ -4,7 +4,810 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1.0">
 <title>Azure Policy Analyzer</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Segoe UI',Tahoma,sans-serif;background:#f0f2f5;color:#1f1f1f;font-size:14px}
+.hdr{background:linear-gradient(135deg,#0078d4,#005a9e);color:#fff;padding:14px 32px;display:flex;align-items:center;gap:16px;box-shadow:0 2px 10px rgba(0,0,0,.25)}
+.hdr-logo{width:36px;height:36px;background:rgba(255,255,255,.15);border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:1.3rem}
+.hdr h1{font-size:1.2rem;font-weight:600}.hdr-sub{font-size:.78rem;opacity:.75;margin-top:1px}
+.hdr-status{margin-left:auto;font-size:.8rem;background:rgba(255,255,255,.12);padding:4px 12px;border-radius:20px;display:flex;align-items:center;gap:6px}
+.status-dot{width:8px;height:8px;border-radius:50%;background:#f7c948}.status-dot.ok{background:#54d45a}
+.wrap{max-width:1400px;margin:0 auto;padding:24px}
+.card{background:#fff;border-radius:10px;box-shadow:0 2px 8px rgba(0,0,0,.08);padding:24px;margin-bottom:20px}
+.card-title{font-size:.95rem;font-weight:700;color:#1f1f1f;margin-bottom:16px;padding-bottom:10px;border-bottom:2px solid #0078d4;display:flex;align-items:center;gap:8px}
+.form-row{display:grid;grid-template-columns:1fr 1fr;gap:24px;align-items:start}
+.form-group{margin-bottom:14px}
+.lbl{display:block;font-size:.8rem;font-weight:600;color:#605e5c;margin-bottom:5px}
+.inp{width:100%;padding:8px 11px;border:1px solid #c8c6c4;border-radius:5px;font-size:.875rem;transition:border .15s}
+.inp:focus{border-color:#0078d4;outline:none;box-shadow:0 0 0 2px rgba(0,120,212,.18)}
+.hint{font-size:.75rem;color:#8a8886;margin-top:4px}
+.btn{padding:8px 20px;border:none;border-radius:5px;font-size:.875rem;font-weight:600;cursor:pointer;transition:all .15s;display:inline-flex;align-items:center;gap:6px}
+.btn-primary{background:#0078d4;color:#fff}.btn-primary:hover:not(:disabled){background:#106ebe}.btn-primary:disabled{background:#a0a0a0;cursor:not-allowed}
+.btn-danger{background:#a4262c;color:#fff}.btn-danger:hover:not(:disabled){background:#8a1e24}
+.btn-warn{background:#f7c300;color:#1f1f1f}.btn-warn:hover:not(:disabled){background:#e0b000}
+.btn-sm{padding:5px 13px;font-size:.8rem}
+.badge{display:inline-block;padding:2px 9px;border-radius:11px;font-size:.72rem;font-weight:700;white-space:nowrap}
+.b-err{background:#fde7e9;color:#a4262c}.b-warn{background:#fff4ce;color:#7a4100}.b-info{background:#dce9f8;color:#004578}.b-ok{background:#dff6dd;color:#107c10}
+.b-danger-pill{background:#a4262c;color:#fff;padding:3px 10px;border-radius:11px;font-size:.78rem;font-weight:700}
+.b-warning-pill{background:#f7c300;color:#1f1f1f;padding:3px 10px;border-radius:11px;font-size:.78rem;font-weight:700}
+.b-safe-pill{background:#107c10;color:#fff;padding:3px 10px;border-radius:11px;font-size:.78rem;font-weight:700}
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:14px;margin-bottom:22px}
+.stat{background:#fff;border-radius:8px;padding:16px 14px;text-align:center;box-shadow:0 2px 6px rgba(0,0,0,.07);border-top:3px solid #0078d4}
+.stat.s-err{border-top-color:#a4262c}.stat.s-warn{border-top-color:#f7c300}.stat.s-ok{border-top-color:#107c10}
+.stat-n{font-size:1.9rem;font-weight:800;line-height:1}.stat-l{font-size:.75rem;color:#605e5c;margin-top:5px}
+.n-err{color:#a4262c}.n-warn{color:#7a4100}.n-ok{color:#107c10}.n-blue{color:#0078d4}
+.tabs{display:flex;gap:2px;border-bottom:2px solid #edebe9;margin-bottom:22px;flex-wrap:wrap}
+.tab{padding:10px 20px;cursor:pointer;font-size:.875rem;font-weight:600;color:#605e5c;border-bottom:3px solid transparent;margin-bottom:-2px;transition:all .15s;border-radius:5px 5px 0 0}
+.tab:hover{color:#0078d4;background:#f3f9ff}.tab.active{color:#0078d4;border-bottom-color:#0078d4;background:#f0f7ff}
+.tab-badge{background:#0078d4;color:#fff;border-radius:10px;padding:1px 7px;font-size:.7rem;margin-left:6px}
+.tab-badge.red{background:#a4262c}.tab-badge.amber{background:#f7c300;color:#1f1f1f}
+.tc{display:none}.tc.active{display:block}
+.tbl-wrap{overflow-x:auto}
+table{width:100%;border-collapse:collapse}
+th{text-align:left;padding:10px 12px;background:#faf9f8;font-weight:700;font-size:.8rem;color:#323130;border-bottom:2px solid #edebe9;white-space:nowrap}
+td{padding:9px 12px;border-bottom:1px solid #f3f2f1;vertical-align:middle}
+tr.clickable{cursor:pointer}tr.clickable:hover td{background:#faf9f8}
+.exp-row{display:none}.exp-row.open{display:table-row}
+.exp-row td{background:#faf9f8;padding:12px 20px}
+.detail-box{background:#fff;border:1px solid #edebe9;border-radius:7px;padding:16px}
+.detail-desc{font-size:.82rem;color:#605e5c;margin-bottom:12px;padding-bottom:10px;border-bottom:1px solid #edebe9}
+.issue-item{display:flex;gap:10px;padding:8px 0;border-bottom:1px solid #f3f2f1}.issue-item:last-child{border-bottom:none}
+.issue-icon{font-size:1rem;flex-shrink:0;line-height:1.4}
+.issue-msg{font-weight:600;font-size:.84rem}.issue-fix{font-size:.78rem;color:#605e5c;margin-top:2px}.fix-kw{color:#0078d4;font-weight:600}
+.arr{display:inline-block;transition:transform .18s;color:#0078d4;font-size:.8rem}.arr.open{transform:rotate(90deg)}
+.progress-bar{height:5px;background:#edebe9;border-radius:3px;overflow:hidden;margin-top:8px}
+.progress-fill{height:100%;background:linear-gradient(90deg,#0078d4,#2899f5);border-radius:3px;transition:width .4s}
+.alert{padding:10px 14px;border-radius:6px;margin-bottom:14px;font-size:.84rem}
+.a-err{background:#fde7e9;color:#a4262c;border:1px solid #f1707b}.a-info{background:#dce9f8;color:#004578;border:1px solid #2899f5}
+.a-warn{background:#fff4ce;color:#7a4100;border:1px solid #f7c300}
+.spin{display:inline-block;width:16px;height:16px;border:2px solid rgba(255,255,255,.3);border-top-color:#fff;border-radius:50%;animation:spin .7s linear infinite}
+.spin-dark{border-color:rgba(0,120,212,.2);border-top-color:#0078d4}
+@keyframes spin{to{transform:rotate(360deg)}}
+.empty{text-align:center;padding:40px 20px;color:#605e5c}.empty-icon{font-size:2.8rem;margin-bottom:10px}.empty p{font-size:.875rem;line-height:1.6}
+.rec-card{border:1px solid #edebe9;border-radius:8px;margin-bottom:14px;overflow:hidden}
+.rec-hdr{display:flex;align-items:center;justify-content:space-between;padding:12px 16px;background:#faf9f8;border-bottom:1px solid #edebe9}
+.rec-custom-name{font-weight:700;font-size:.9rem}.rec-body{padding:14px 16px}
+.match-item{display:flex;align-items:flex-start;gap:12px;padding:10px;border:1px solid #edebe9;border-radius:6px;margin-bottom:8px;transition:border .15s,background .15s}
+.match-item:hover{border-color:#0078d4;background:#f3f9ff}
+.match-score{background:#0078d4;color:#fff;padding:4px 9px;border-radius:11px;font-size:.72rem;font-weight:700;white-space:nowrap;align-self:flex-start;margin-top:2px}
+.match-score.hi{background:#107c10}.match-name{font-weight:700;font-size:.875rem}
+.match-desc{font-size:.78rem;color:#605e5c;margin-top:2px}.match-why{font-size:.74rem;color:#0078d4;margin-top:3px}
+.match-meta{margin-top:5px;display:flex;gap:6px;align-items:center;flex-wrap:wrap}
+.tag{display:inline-block;background:#f3f2f1;padding:1px 8px;border-radius:3px;font-size:.72rem;color:#323130}
+.portal-link{font-size:.75rem;color:#0078d4;text-decoration:none}.portal-link:hover{text-decoration:underline}
+.filter-bar{display:flex;gap:10px;margin-bottom:14px;flex-wrap:wrap;align-items:center}
+.filter-btn{padding:5px 13px;border-radius:15px;border:1px solid #c8c6c4;background:#fff;font-size:.8rem;cursor:pointer;transition:all .15s}
+.filter-btn.active{background:#0078d4;color:#fff;border-color:#0078d4}
+.search-inp{padding:6px 11px;border:1px solid #c8c6c4;border-radius:15px;font-size:.8rem;width:220px}
+.search-inp:focus{outline:none;border-color:#0078d4}
+.muted{color:#8a8886}
+/* MG Tree */
+.mg-wrap{border:1px solid #edebe9;border-radius:6px;max-height:280px;overflow-y:auto;background:#faf9f8}
+.mg-node{margin:1px 0}
+.mg-hdr{display:flex;align-items:center;gap:6px;padding:5px 8px;cursor:pointer;border-radius:4px;user-select:none}
+.mg-hdr:hover{background:#e8f0fb}
+.mg-arrow{width:14px;text-align:center;font-size:.68rem;color:#0078d4;flex-shrink:0;transition:transform .15s}
+.mg-name{font-size:.84rem;font-weight:600}
+.mg-children{padding-left:18px}.mg-children.hidden{display:none}
+.tree-sub{display:flex;align-items:center;gap:7px;padding:4px 8px;border-radius:4px}
+.tree-sub:hover{background:#e8f0fb}
+.tree-sub label{cursor:pointer;font-size:.84rem;flex:1}
+.tree-loading{padding:16px;color:#605e5c;font-size:.84rem;text-align:center}
+/* Scan status */
+.scan-sub-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:6px;margin-top:10px}
+.scan-sub-item{display:flex;align-items:center;gap:8px;padding:7px 10px;border-radius:5px;font-size:.82rem;border:1px solid}
+.scan-sub-item.scanning{background:#dce9f8;border-color:#90c3f5}
+.scan-sub-item.done{background:#dff6dd;border-color:#92d9a0}
+.scan-sub-item.error{background:#fde7e9;border-color:#f4a6ab}
+.sub-stat-name{font-weight:600;flex:1}.sub-stat-detail{font-size:.73rem;color:#605e5c;margin-left:4px}
+/* Cache indicator */
+.cache-pill{display:inline-flex;align-items:center;gap:5px;font-size:.75rem;padding:3px 9px;border-radius:11px;border:1px solid}
+.cache-fresh{background:#dff6dd;color:#107c10;border-color:#92d9a0}
+.cache-stale{background:#fff4ce;color:#7a4100;border-color:#f7c300}
+.cache-empty{background:#f3f2f1;color:#605e5c;border-color:#c8c6c4}
+/* ---- AGENT CHAT ---- */
+.agent-layout{display:grid;grid-template-columns:280px 1fr;gap:20px;height:600px}
+.agent-sidebar{display:flex;flex-direction:column;gap:16px}
+.agent-cfg{background:#faf9f8;border:1px solid #edebe9;border-radius:8px;padding:14px}
+.agent-cfg-title{font-size:.82rem;font-weight:700;margin-bottom:10px;color:#323130}
+.agent-type-row{display:flex;gap:6px;margin-bottom:10px}
+.type-btn{flex:1;padding:5px 8px;border:1px solid #c8c6c4;background:#fff;border-radius:4px;font-size:.78rem;cursor:pointer;text-align:center}
+.type-btn.active{background:#0078d4;color:#fff;border-color:#0078d4}
+.agent-context-box{background:#faf9f8;border:1px solid #edebe9;border-radius:8px;padding:14px;font-size:.78rem;color:#605e5c;flex:1;overflow-y:auto}
+.agent-context-title{font-size:.82rem;font-weight:700;margin-bottom:8px;color:#323130}
+.agent-main{display:flex;flex-direction:column}
+.chat-messages{flex:1;overflow-y:auto;border:1px solid #edebe9;border-radius:8px;padding:14px;background:#fafafa;display:flex;flex-direction:column;gap:12px}
+.chat-msg{max-width:90%;padding:12px 14px;border-radius:10px;font-size:.875rem;line-height:1.6}
+.chat-msg.user{background:#0078d4;color:#fff;align-self:flex-end;border-radius:10px 10px 2px 10px}
+.chat-msg.assistant{background:#fff;border:1px solid #edebe9;align-self:flex-start;border-radius:2px 10px 10px 10px}
+.chat-msg.system{background:#fff4ce;border:1px solid #f7c300;align-self:center;text-align:center;font-size:.8rem;max-width:100%;border-radius:6px;padding:8px 14px}
+.chat-msg .markdown-body h1,.chat-msg .markdown-body h2,.chat-msg .markdown-body h3{font-size:.95rem;margin:.6em 0 .3em}
+.chat-msg .markdown-body p{margin:.4em 0}
+.chat-msg .markdown-body ul,.chat-msg .markdown-body ol{padding-left:1.2em;margin:.3em 0}
+.chat-msg .markdown-body code{background:#f3f2f1;padding:1px 5px;border-radius:3px;font-size:.82rem;font-family:monospace}
+.chat-msg.assistant .markdown-body code{background:#f0f2f5}
+.chat-msg .markdown-body pre{background:#1f1f1f;color:#d4d4d4;padding:12px;border-radius:6px;overflow-x:auto;margin:.5em 0}
+.chat-msg .markdown-body pre code{background:none;padding:0;color:inherit}
+.chat-input-row{display:flex;gap:8px;margin-top:10px;align-items:flex-end}
+.chat-input{flex:1;padding:9px 12px;border:1px solid #c8c6c4;border-radius:8px;font-size:.875rem;resize:none;min-height:40px;max-height:120px;font-family:inherit}
+.chat-input:focus{outline:none;border-color:#0078d4}
+/* Policy JSON card */
+.json-card{background:#1e1e1e;border-radius:8px;margin-top:10px;overflow:hidden}
+.json-card-hdr{display:flex;align-items:center;justify-content:space-between;padding:8px 14px;background:#252526}
+.json-card-title{color:#9cdcfe;font-size:.82rem;font-weight:600;font-family:monospace}
+.json-copy-btn{padding:3px 10px;background:#0078d4;color:#fff;border:none;border-radius:3px;font-size:.75rem;cursor:pointer}
+.json-copy-btn:hover{background:#106ebe}
+.json-body{padding:14px;overflow-x:auto;font-size:.8rem;font-family:monospace;color:#d4d4d4;white-space:pre}
+/* Confirmation modal */
+.modal-backdrop{position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:1000;display:flex;align-items:center;justify-content:center}
+.modal-backdrop.hidden{display:none!important}
+.step-done-ico{color:#107c10}
+.step-active-ico{color:#0078d4}
+.step-pending-ico{color:#8a8886}
+/* Projects tab */
+.proj-card{border:1px solid #edebe9;border-radius:10px;margin-bottom:18px;overflow:hidden;transition:box-shadow .15s}
+.proj-card:hover{box-shadow:0 4px 14px rgba(0,0,0,.10)}
+.proj-hdr{padding:16px 20px;background:#faf9f8;border-bottom:1px solid #edebe9;display:flex;align-items:center;justify-content:space-between;gap:12px}
+.proj-title{font-size:1rem;font-weight:700;color:#1f1f1f;flex:1}
+.proj-meta{font-size:.78rem;color:#605e5c;margin-top:3px}
+.proj-progress-wrap{width:180px;flex-shrink:0}
+.proj-progress-bar{height:8px;background:#edebe9;border-radius:4px;overflow:hidden;margin-top:5px}
+.proj-progress-fill{height:100%;border-radius:4px;transition:width .6s}
+.proj-body{padding:16px 20px}
+.task-item{display:flex;align-items:flex-start;gap:12px;padding:10px 0;border-bottom:1px solid #f3f2f1}
+.task-item:last-child{border-bottom:none}
+.task-check{width:18px;height:18px;border-radius:50%;border:2px solid #c8c6c4;background:#fff;flex-shrink:0;cursor:pointer;display:flex;align-items:center;justify-content:center;margin-top:1px;transition:all .15s}
+.task-check.done{background:#107c10;border-color:#107c10;color:#fff}
+.task-check.in-progress{background:#0078d4;border-color:#0078d4;color:#fff}
+.task-title{font-size:.875rem;flex:1}
+.task-title.done-text{text-decoration:line-through;color:#8a8886}
+.task-status-sel{font-size:.78rem;border:1px solid #edebe9;border-radius:4px;padding:2px 6px;background:#fff;cursor:pointer}
+.proj-add-btn{background:#f3f9ff;border:1px dashed #0078d4;color:#0078d4;border-radius:6px;padding:8px;width:100%;text-align:center;cursor:pointer;font-size:.82rem;margin-top:8px}
+.proj-add-btn:hover{background:#dce9f8}
+.new-proj-form{background:#faf9f8;border:1px solid #edebe9;border-radius:10px;padding:20px;margin-bottom:18px}
+.form-inline{display:grid;grid-template-columns:1fr 1fr auto;gap:12px;align-items:end}
+.priority-badge{padding:2px 8px;border-radius:3px;font-size:.72rem;font-weight:700}
+.p-high{background:#fde7e9;color:#a4262c}
+.p-medium{background:#fff4ce;color:#7a4100}
+.p-low{background:#dff6dd;color:#107c10}
+.btn-dismiss{background:none;border:1px solid #c8c6c4;color:#605e5c;padding:3px 10px;border-radius:4px;font-size:.75rem;cursor:pointer;transition:all .15s}
+.btn-dismiss:hover{background:#fde7e9;border-color:#f1707b;color:#a4262c}
+.btn-undismiss{background:#f3f2f1;border:1px solid #c8c6c4;color:#605e5c;padding:3px 10px;border-radius:4px;font-size:.75rem;cursor:pointer}
+.nc-badge-critical{background:#a4262c;color:#fff;padding:2px 8px;border-radius:3px;font-size:.72rem;font-weight:700}
+.nc-badge-warn{background:#fff4ce;color:#7a4100;padding:2px 8px;border-radius:3px;font-size:.72rem;font-weight:700}
+.nc-badge-ok{background:#dff6dd;color:#107c10;padding:2px 8px;border-radius:3px;font-size:.72rem;font-weight:700}
+.dismissed-row td{opacity:.4}
+.scan-console{background:#1e1e1e;border-radius:6px;padding:10px 12px;margin-top:10px;font-family:monospace;font-size:.76rem;color:#cccccc;height:120px;overflow-y:auto;line-height:1.6;white-space:pre-wrap;word-break:break-all}
+.scan-console .log-warn{color:#f7c948}
+.scan-console .log-error{color:#f14c4c}
+.scan-console .log-ok{color:#4caf50}
+.scan-console .log-info{color:#9cdcfe}
+.modal{background:#fff;border-radius:12px;width:560px;max-width:95vw;max-height:90vh;overflow-y:auto;box-shadow:0 8px 40px rgba(0,0,0,.3)}
+.modal-hdr{padding:20px 24px 14px;border-bottom:2px solid}
+.modal-hdr.danger{border-bottom-color:#a4262c}
+.modal-hdr.warning{border-bottom-color:#f7c300}
+.modal-hdr.safe{border-bottom-color:#107c10}
+.modal-title{font-size:1.1rem;font-weight:700;margin-bottom:6px;display:flex;align-items:center;gap:10px}
+.modal-body{padding:20px 24px}
+.modal-section{margin-bottom:16px}
+.modal-section-title{font-size:.8rem;font-weight:700;color:#605e5c;text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px}
+.modal-explanation{font-size:.875rem;line-height:1.6}
+.modal-what{background:#faf9f8;border:1px solid #edebe9;border-radius:6px;padding:12px;font-size:.84rem;line-height:1.6}
+.modal-reasons{list-style:none;padding:0}
+.modal-reasons li{display:flex;gap:8px;padding:5px 0;font-size:.84rem}
+.modal-reasons li::before{content:'⚠';flex-shrink:0}
+.danger .modal-reasons li::before{content:'🔴'}
+.modal-confirm-check{display:flex;align-items:center;gap:8px;background:#fde7e9;border:1px solid #f1707b;border-radius:6px;padding:10px 12px;margin-bottom:16px;font-size:.84rem}
+.modal-confirm-check input{width:16px;height:16px;cursor:pointer}
+.modal-actions{display:flex;gap:10px;justify-content:flex-end;padding:16px 24px;border-top:1px solid #edebe9}
+.hidden{display:none!important}
+/* Autofix */
+.autofix-btn{background:#107c10;color:#fff;border:none;padding:5px 13px;border-radius:4px;font-size:.78rem;font-weight:700;cursor:pointer;display:inline-flex;align-items:center;gap:5px}
+.autofix-btn:hover{background:#0e6b0e}
+.autofix-btn:disabled{background:#a0a0a0;cursor:not-allowed}
+.param-table{width:100%;border-collapse:collapse;font-size:.78rem;margin-top:6px}
+.param-table th{text-align:left;padding:5px 8px;background:#faf9f8;border-bottom:1px solid #edebe9;font-weight:700}
+.param-table td{padding:5px 8px;border-bottom:1px solid #f3f2f1}
+.param-src-exact{color:#107c10;font-size:.7rem}
+.param-src-fuzzy{color:#f7c300;font-size:.7rem}
+.param-src-default{color:#8a8886;font-size:.7rem}
+.param-src-missing{color:#a4262c;font-weight:700;font-size:.7rem}
+.param-input{width:100%;padding:4px 7px;border:1px solid #c8c6c4;border-radius:3px;font-size:.78rem}
+.assignment-tag{display:inline-flex;align-items:center;gap:5px;background:#dce9f8;color:#004578;border-radius:4px;padding:2px 8px;font-size:.73rem;margin-top:4px}
+.match-selector-item:hover{border-color:#0078d4;background:#f0f7ff}
+.match-selector-item.selected{border-color:#0078d4;background:#f0f7ff}
+</style>
+</head>
+<body>
+
+<div class="hdr">
+  <div class="hdr-logo">🛡</div>
+  <div><h1>Azure Policy Analyzer</h1><div class="hdr-sub">Custom policy health check, recommendations, and AI-powered agent</div></div>
+  <div class="hdr-status" id="hdr-status"><span class="status-dot" id="status-dot"></span><span id="status-text">Not connected</span></div>
+</div>
+
+<div class="wrap">
+
+  <!-- Connect panel -->
+  <div class="card" id="connect-card">
+    <div class="card-title">🔐 Connect to Azure</div>
+    <div class="form-row">
+      <div>
+        <div class="form-group">
+          <label class="lbl" for="tenant-id">Tenant ID <span class="muted">(optional)</span></label>
+          <input id="tenant-id" class="inp" type="text" placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx">
+          <div class="hint">Leave blank to use your default Azure directory</div>
+        </div>
+        <div id="conn-alert"></div>
+        <button class="btn btn-primary" id="conn-btn" onclick="connectAzure()">Connect to Azure</button>
+        <div class="hint" style="margin-top:8px">A browser window will open for Microsoft sign-in</div>
+        <div style="margin-top:14px">
+          <span class="agent-cfg-title" style="display:block;margin-bottom:6px;font-size:.8rem;font-weight:700;color:#605e5c">Built-in Policy Cache</span>
+          <span id="cache-status-pill" class="cache-pill cache-empty">Loading...</span>
+          <button class="btn btn-sm" style="margin-left:8px;background:#f3f2f1;border:1px solid #c8c6c4;color:#323130" onclick="refreshCache()">Refresh</button>
+        </div>
+      </div>
+
+      <div id="sub-panel" class="hidden">
+        <div class="form-group">
+          <label class="lbl">Scope - select subscriptions to analyze</label>
+          <div class="mg-wrap" id="mg-tree-el">
+            <div class="tree-loading"><span class="spin spin-dark" style="width:14px;height:14px;border-width:2px"></span> Loading management groups...</div>
+          </div>
+          <div class="hint" style="margin-top:5px;display:flex;justify-content:space-between">
+            <span id="sel-count">0 selected</span>
+            <span><a href="#" onclick="selectAll(true);return false" style="color:#0078d4;font-size:.75rem">Select all</a> &nbsp; <a href="#" onclick="selectAll(false);return false" style="color:#0078d4;font-size:.75rem">Clear</a></span>
+          </div>
+        </div>
+        <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+          <button class="btn btn-primary" id="scan-btn" onclick="startScan()">🔍 Analyze Policies</button>
+          <button class="btn hidden" id="stop-btn" style="background:#a4262c;color:#fff" onclick="stopScan()">⏹ Stop Scan</button>
+        </div>
+        <div id="scan-progress" class="hidden" style="margin-top:16px">
+          <!-- Main progress bar -->
+          <div style="background:#faf9f8;border:1px solid #edebe9;border-radius:8px;padding:14px">
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+              <div style="display:flex;align-items:center;gap:8px">
+                <span class="spin spin-dark" id="scan-spinner" style="width:14px;height:14px;border-width:2px"></span>
+                <span style="font-size:.84rem;font-weight:600" id="scan-global-msg">Starting scan...</span>
+              </div>
+              <span class="muted" style="font-size:.78rem" id="scan-pct-label">0%</span>
+            </div>
+            <!-- Segmented progress bar -->
+            <div style="height:10px;background:#edebe9;border-radius:5px;overflow:hidden;position:relative">
+              <div id="scan-bar-fill" style="height:100%;background:linear-gradient(90deg,#0078d4,#2899f5);border-radius:5px;width:0%;transition:width .5s ease-in-out"></div>
+            </div>
+            <!-- Step indicators -->
+            <div style="display:flex;justify-content:space-between;margin-top:6px;font-size:.7rem;color:#8a8886">
+              <span id="step-auth" style="display:flex;align-items:center;gap:3px">⬜ Auth</span>
+              <span id="step-builtins" style="display:flex;align-items:center;gap:3px">⬜ Built-ins</span>
+              <span id="step-scan" style="display:flex;align-items:center;gap:3px">⬜ Scanning</span>
+              <span id="step-analyze" style="display:flex;align-items:center;gap:3px">⬜ Analysis</span>
+              <span id="step-done" style="display:flex;align-items:center;gap:3px">⬜ Done</span>
+            </div>
+            <!-- Last activity timestamp -->
+            <div style="margin-top:8px;font-size:.72rem;color:#8a8886" id="scan-last-activity"></div>
+          </div>
+          <!-- Per-subscription status grid -->
+          <div class="scan-sub-grid" id="scan-sub-grid" style="margin-top:10px"></div>
+          <!-- Live console log -->
+          <div class="scan-console" id="scan-console"><span style="color:#569cd6">Azure Policy Analyzer</span> - waiting for scan output...</div>
+        </div>
+        <div id="scan-alert" class="hidden" style="margin-top:10px"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Results -->
+  <div id="results" class="hidden">
+    <div class="stats" id="stats"></div>
+    <div class="tabs">
+      <div class="tab" id="tab-btn-compliance" onclick="showTab('compliance')">Non-Compliance <span class="tab-badge red" id="tbadge-compliance">0</span></div>
+      <div class="tab" id="tab-btn-custom" onclick="showTab('custom')">Custom Policy Issues <span class="tab-badge amber" id="tbadge-custom">0</span></div>
+      <div class="tab active" id="tab-btn-dashboard" onclick="showTab('dashboard')">📊 Dashboard</div>
+      <div class="tab" id="tab-btn-recs" onclick="showTab('recs')">🔄 Built-in Replacements <span class="tab-badge" id="tbadge-recs">0</span></div>
+      <div class="tab" id="tab-btn-agent" onclick="showTab('agent')">🤖 Policy Agent</div>
+      <div class="tab" id="tab-btn-projects" onclick="showTab('projects')">📋 Projects</div>
+      <div class="tab" id="tab-btn-insights" onclick="showTab('insights')">🔎 Insights <span class="tab-badge" id="tbadge-insights">0</span></div>
+      <div class="tab" id="tab-btn-insights" onclick="showTab('insights')">🔎 Insights <span class="tab-badge" id="tbadge-insights">0</span></div>
+    </div>
+
+    <div class="tc" id="tc-compliance">
+      <div class="card"><div class="card-title">Non-Compliant Policy Assignments</div><div id="compliance-body"></div></div>
+    </div>
+    <div class="tc" id="tc-custom">
+      <div class="card">
+        <div class="card-title">Custom Policy Definitions - Health Check</div>
+        <div class="filter-bar">
+          <button class="filter-btn active" onclick="filterCustom('all',this)">All</button>
+          <button class="filter-btn" onclick="filterCustom('error',this)">🔴 Errors</button>
+          <button class="filter-btn" onclick="filterCustom('warning',this)">🟡 Warnings</button>
+          <button class="filter-btn" onclick="filterCustom('ok',this)">✅ Healthy</button>
+          <input class="search-inp" id="custom-search" type="text" placeholder="Search policies..." oninput="searchCustom(this.value)">
+        </div>
+        <div id="custom-body"></div>
+      </div>
+    </div>
+    <div class="tc" id="tc-recs">
+      <div class="card">
+        <div class="card-title">
+          🔄 Built-in Policy Replacements
+          <span class="badge b-ok" style="font-size:.72rem;margin-left:8px">Auto-updates with Azure</span>
+        </div>
+        <div style="background:#dff6dd;border:1px solid #92d9a0;border-radius:8px;padding:12px 16px;margin-bottom:18px;font-size:.84rem;line-height:1.6">
+          <strong>Goal:</strong> Replace your custom policies with Microsoft-maintained built-in equivalents.
+          Built-in policies are updated automatically when Azure APIs change - no more broken definitions or outdated policy rules.
+          Click <strong>Auto Fix</strong> on any row to create the new assignment instantly.
+        </div>
+        <div class="filter-bar" style="flex-wrap:wrap;gap:8px">
+          <button class="filter-btn active" data-recs-filter="all" onclick="setRecsFilter('all',this)">All</button>
+          <button class="filter-btn" data-recs-filter="non_compliant" onclick="setRecsFilter('non_compliant',this)">🔴 Has Non-Compliant</button>
+          <button class="filter-btn" data-recs-filter="dismissed" onclick="setRecsFilter('dismissed',this)">🙈 Dismissed</button>
+          <button class="filter-btn" data-recs-filter="assigned" onclick="setRecsFilter('assigned',this)">📌 Already Assigned</button>
+          <button class="filter-btn" data-recs-filter="unassigned" onclick="setRecsFilter('unassigned',this)">No Assignment</button>
+          <button class="filter-btn" data-recs-filter="error" onclick="setRecsFilter('error',this)">🔴 Has Issues</button>
+          <select class="search-inp" id="recs-op-filter" onchange="applyRecsFilters()" style="width:190px;padding:5px 10px">
+            <option value="">All operations</option>
+          </select>
+          <select class="search-inp" id="recs-cat-filter" onchange="applyRecsFilters()" style="width:160px;padding:5px 10px">
+            <option value="">All categories</option>
+          </select>
+          <input class="search-inp" id="recs-search" type="text" placeholder="Search name..." oninput="applyRecsFilters()" style="width:200px">
+          <span class="muted" style="font-size:.8rem;margin-left:4px" id="recs-count-label"></span>
+        </div>
+        <div id="recs-body"></div>
+      </div>
+    </div>
+
+
+
+    <!-- DASHBOARD TAB -->
+    <div class="tc active" id="tc-dashboard">
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr 320px;gap:16px;align-items:start">
+
+        <!-- Policy Compliance donut -->
+        <div class="card" style="padding:18px">
+          <div style="font-size:.85rem;font-weight:600;color:#323130;margin-bottom:12px;display:flex;align-items:center;justify-content:space-between">
+            Policy Compliance
+            <a id="link-policy-compliance" href="#" target="_blank" style="font-size:.72rem;color:#0078d4">View in Portal ↗</a>
+          </div>
+          <div style="display:flex;align-items:center;gap:18px">
+            <svg id="donut-policy" width="110" height="110" viewBox="0 0 110 110"></svg>
+            <div id="legend-policy" style="font-size:.78rem;line-height:1.9"></div>
+          </div>
+        </div>
+
+        <!-- Initiative Compliance donut -->
+        <div class="card" style="padding:18px">
+          <div style="font-size:.85rem;font-weight:600;color:#323130;margin-bottom:12px;display:flex;align-items:center;justify-content:space-between">
+            Initiative Compliance
+            <a href="https://portal.azure.com/#view/Microsoft_Azure_Policy/PolicyMenuBlade/~/Compliance" target="_blank" style="font-size:.72rem;color:#0078d4">View in Portal ↗</a>
+          </div>
+          <div style="display:flex;align-items:center;gap:18px">
+            <svg id="donut-initiative" width="110" height="110" viewBox="0 0 110 110"></svg>
+            <div id="legend-initiative" style="font-size:.78rem;line-height:1.9"></div>
+          </div>
+        </div>
+
+        <!-- Overall resource compliance + pending remediation -->
+        <div style="display:flex;flex-direction:column;gap:16px">
+          <div class="card" style="padding:18px">
+            <div style="font-size:.85rem;font-weight:600;color:#323130;margin-bottom:10px;display:flex;align-items:center;justify-content:space-between">
+              Overall Resource Compliance
+              <a id="link-resource-compliance" href="#" target="_blank" style="font-size:.72rem;color:#0078d4">↗</a>
+            </div>
+            <div id="resource-pct" style="font-size:2.4rem;font-weight:800;line-height:1;color:#1f1f1f">-</div>
+            <div id="resource-bar-wrap" style="margin-top:10px">
+              <div style="height:8px;background:#edebe9;border-radius:4px;overflow:hidden">
+                <div id="resource-bar" style="height:100%;background:#107c10;border-radius:4px;width:0%;transition:width .8s"></div>
+              </div>
+              <div id="resource-label" style="font-size:.75rem;color:#605e5c;margin-top:5px"></div>
+            </div>
+          </div>
+          <div class="card" style="padding:18px;cursor:pointer" id="pending-card" onclick="showTab('compliance')">
+            <div style="font-size:.85rem;font-weight:600;color:#323130;margin-bottom:6px">Pending Remediation</div>
+            <div style="display:flex;align-items:center;gap:14px">
+              <div id="pending-count" style="font-size:2.4rem;font-weight:800;color:#c73b00;line-height:1">-</div>
+              <div style="font-size:.78rem;color:#605e5c;line-height:1.4">Remediable assignments with non-compliant resources</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Recommended Assignments -->
+        <div class="card" style="padding:18px">
+          <div style="font-size:.88rem;font-weight:700;color:#323130;margin-bottom:14px;display:flex;align-items:center;gap:6px">
+            💡 Recommended Assignments
+          </div>
+          <div id="recommended-assignments">
+            <div class="muted" style="font-size:.82rem">Run a scan to see recommendations.</div>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- ALZ Score -->
+      <div class="card" style="margin-top:16px">
+        <div class="card-title" style="display:flex;align-items:center;justify-content:space-between">
+          🏆 ALZ Compliance Score
+          <a href="https://github.com/Azure/Enterprise-Scale/wiki/ALZ-Policies" target="_blank" style="font-size:.78rem;color:#0078d4;font-weight:400">ALZ Reference ↗</a>
+        </div>
+        <div id="alz-score-section">
+          <div class="muted" style="font-size:.82rem">Run a scan to calculate ALZ compliance score.</div>
+        </div>
+      </div>
+
+      <!-- Non-Compliant Assignments table -->
+      <div class="card" style="margin-top:16px">
+        <div class="card-title" style="display:flex;align-items:center;justify-content:space-between">
+          Top Non-Compliant Assignments
+          <a href="https://portal.azure.com/#view/Microsoft_Azure_Policy/PolicyMenuBlade/~/Compliance" target="_blank" style="font-size:.78rem;color:#0078d4;font-weight:400">View all in Portal ↗</a>
+        </div>
+        <div id="dashboard-noncompliant"></div>
+      </div>
+    </div>
+
+
+    <!-- PROJECTS TAB -->
+    <div class="tc" id="tc-projects">
+      <div class="card">
+        <div class="card-title" style="display:flex;align-items:center;justify-content:space-between">
+          📋 Policy Migration Projects
+          <button class="btn btn-primary btn-sm" onclick="showNewProjectForm()">+ New Project</button>
+        </div>
+        <p class="muted" style="font-size:.84rem;margin-bottom:18px">
+          Track your policy migration work - migrating custom policies to built-in, assigning initiatives, fixing compliance issues.
+          Projects are saved locally in your browser.
+        </p>
+
+        <!-- New project form (hidden by default) -->
+        <div class="new-proj-form hidden" id="new-proj-form">
+          <div style="font-weight:700;font-size:.9rem;margin-bottom:14px">New Project</div>
+          <div class="form-inline" style="margin-bottom:12px">
+            <div>
+              <label class="lbl">Project name</label>
+              <input id="new-proj-name" class="inp" type="text" placeholder="e.g. Migrate to MCSB">
+            </div>
+            <div>
+              <label class="lbl">Target date (optional)</label>
+              <input id="new-proj-date" class="inp" type="date">
+            </div>
+            <div>
+              <label class="lbl">Priority</label>
+              <select id="new-proj-priority" class="inp">
+                <option value="high">High</option>
+                <option value="medium" selected>Medium</option>
+                <option value="low">Low</option>
+              </select>
+            </div>
+          </div>
+          <div class="form-group">
+            <label class="lbl">Description (optional)</label>
+            <input id="new-proj-desc" class="inp" type="text" placeholder="What are you trying to achieve?">
+          </div>
+          <div style="display:flex;gap:8px;margin-top:12px">
+            <button class="btn btn-primary" onclick="createProject()">Create Project</button>
+            <button class="btn" style="background:#f3f2f1;border:1px solid #c8c6c4;color:#323130" onclick="hideNewProjectForm()">Cancel</button>
+          </div>
+          <!-- Quick start templates -->
+          <div style="margin-top:16px;padding-top:14px;border-top:1px solid #edebe9">
+            <div class="lbl">Quick start from template:</div>
+            <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:6px">
+              <button class="filter-btn" onclick="useTemplate('mcsb')">📦 Adopt MCSB Initiative</button>
+              <button class="filter-btn" onclick="useTemplate('custom_cleanup')">🧹 Clean up Custom Policies</button>
+              <button class="filter-btn" onclick="useTemplate('audit_to_deny')">🎓 Audit → Deny Migration</button>
+              <button class="filter-btn" onclick="useTemplate('tagging')">🏷️ Tagging Governance</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Projects list -->
+        <div id="projects-list">
+          <div class="empty"><div class="empty-icon">📋</div><p>No projects yet. Create one to start tracking your policy migration work.</p></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- INSIGHTS TAB -->
+    <div class="tc" id="tc-insights">
+      <div class="card">
+        <div class="card-title">🔎 Policy Insights</div>
+
+        <!-- Deprecated -->
+        <div style="margin-bottom:28px">
+          <div style="font-weight:700;font-size:.95rem;color:#a4262c;margin-bottom:10px;display:flex;align-items:center;gap:8px">
+            🚫 Deprecated &amp; Broken Policy Assignments
+            <span class="badge b-err" id="badge-deprecated">0</span>
+          </div>
+          <div id="insights-deprecated">
+            <div class="empty" style="padding:20px"><p>Run a scan to detect deprecated or broken assignments.</p></div>
+          </div>
+        </div>
+
+        <!-- Audit→Deny Tracker -->
+        <div style="margin-bottom:28px">
+          <div style="font-weight:700;font-size:.95rem;color:#0078d4;margin-bottom:10px;display:flex;align-items:center;gap:8px">
+            🎓 Audit → Deny Graduation Tracker
+            <span class="badge b-info" id="badge-audit-ready">0</span>
+          </div>
+          <p class="muted" style="font-size:.82rem;margin-bottom:12px">
+            ALZ Best Practice: assign policies as <strong>Audit</strong> for 30 days, then upgrade to <strong>Deny</strong> once you understand the impact.
+            Policies in red have been auditing for 30+ days and are ready to enforce.
+          </p>
+          <div id="insights-audit-ready">
+            <div class="empty" style="padding:20px"><p>Run a scan to see Audit assignments ready for enforcement.</p></div>
+          </div>
+        </div>
+
+        <!-- Duplicates -->
+        <div style="margin-bottom:28px">
+          <div style="font-weight:700;font-size:.95rem;color:#7a4100;margin-bottom:10px;display:flex;align-items:center;gap:8px">
+            ♻️ Duplicate Policies (Same Operation, Same Scope)
+            <span class="badge b-warn" id="badge-duplicates">0</span>
+          </div>
+          <div id="insights-duplicates">
+            <div class="empty" style="padding:20px"><p>Run a scan to detect duplicate policies.</p></div>
+          </div>
+        </div>
+
+        <!-- Initiative opportunities -->
+        <div>
+          <div style="font-weight:700;font-size:.95rem;color:#0078d4;margin-bottom:10px;display:flex;align-items:center;gap:8px">
+            📦 Initiative Consolidation Opportunities
+            <span class="badge b-info" id="badge-initiatives">0</span>
+          </div>
+          <p class="muted" style="font-size:.82rem;margin-bottom:14px">Replace groups of individual policies with a single Microsoft-maintained initiative that covers them all.</p>
+          <div id="insights-initiatives">
+            <div class="empty" style="padding:20px"><p>Run a scan to detect initiative opportunities.</p></div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- AGENT TAB -->
+    <div class="tc" id="tc-agent">
+      <div class="card">
+        <div class="card-title">🤖 Policy Agent <span class="badge b-info" style="font-size:.72rem;margin-left:8px">Powered by OpenAI</span></div>
+        <div class="agent-layout">
+
+          <!-- Sidebar: config + context -->
+          <div class="agent-sidebar">
+            <div class="agent-cfg">
+              <div class="agent-cfg-title">API Configuration</div>
+              <div class="agent-type-row">
+                <button class="type-btn active" id="type-azurecred" onclick="setApiType('azure-credential')">Azure (signed in)</button>
+                <button class="type-btn" id="type-azure" onclick="setApiType('azure')">Azure + Key</button>
+                <button class="type-btn" id="type-openai" onclick="setApiType('openai')">OpenAI</button>
+              </div>
+
+              <!-- Azure signed-in: auto-discover -->
+              <div id="azurecred-fields">
+                <div id="oai-discover-state">
+                  <button class="btn btn-primary" style="width:100%;justify-content:center;font-size:.82rem" id="discover-btn" onclick="discoverOpenAI()">
+                    🔍 Discover my Azure OpenAI models
+                  </button>
+                  <div class="hint" style="margin-top:5px">Scans your subscriptions for GPT deployments you have access to</div>
+                </div>
+                <div id="oai-discover-result" class="hidden">
+                  <div class="form-group">
+                    <label class="lbl">Select model</label>
+                    <select id="oai-model-select" class="inp" style="font-size:.82rem" onchange="onModelSelect(this)">
+                      <option value="">-- select --</option>
+                    </select>
+                  </div>
+                  <div id="oai-selected-detail" class="hint" style="margin-top:4px;line-height:1.6"></div>
+                  <input type="hidden" id="agent-endpoint-cred">
+                  <input type="hidden" id="agent-deployment-cred">
+                </div>
+                <div id="oai-no-models" class="hidden" style="margin-top:8px">
+                  <div class="alert a-warn" style="font-size:.8rem">No Azure OpenAI resources found in your subscriptions.<br>
+                    <a href="https://portal.azure.com/#create/Microsoft.CognitiveServicesOpenAI" target="_blank" style="color:#7a4100;font-weight:700">Create one in Azure Portal ↗</a>
+                  </div>
+                </div>
+                <div class="hint" style="margin-top:6px">Uses your existing Azure sign-in - no key needed</div>
+              </div>
+
+              <!-- Azure + Key -->
+              <div id="azurekey-fields" class="hidden">
+                <div class="form-group">
+                  <label class="lbl">Endpoint</label>
+                  <input id="agent-endpoint" class="inp" type="text" placeholder="https://xxx.openai.azure.com" style="font-size:.82rem">
+                </div>
+                <div class="form-group">
+                  <label class="lbl">Deployment</label>
+                  <input id="agent-deployment" class="inp" type="text" placeholder="gpt-4o" style="font-size:.82rem">
+                </div>
+                <div class="form-group">
+                  <label class="lbl">API Key</label>
+                  <input id="agent-api-key" class="inp" type="password" placeholder="key..." style="font-size:.82rem">
+                </div>
+              </div>
+
+              <!-- OpenAI.com -->
+              <div id="openai-fields" class="hidden">
+                <div class="form-group">
+                  <label class="lbl">API Key</label>
+                  <input id="agent-api-key-oai" class="inp" type="password" placeholder="sk-..." style="font-size:.82rem">
+                </div>
+              </div>
+            </div>
+            <div class="agent-context-box">
+              <div class="agent-context-title">Scan Context</div>
+              <div id="agent-ctx-text" class="muted" style="font-size:.75rem;line-height:1.5">Run a scan first to give the agent context about your policies.</div>
+            </div>
+          </div>
+
+          <!-- Chat area -->
+          <div class="agent-main">
+            <div class="chat-messages" id="chat-messages">
+              <div class="chat-msg system">Hi! I'm your Azure Policy expert. Ask me anything - I can explain policies, write JSON, assign policies, or trigger remediation. I'll always ask for confirmation before making changes.</div>
+            </div>
+            <div id="chat-jsons"></div>
+            <div class="chat-input-row">
+              <textarea id="chat-input" class="chat-input" placeholder="Ask about policies, request JSON, or say 'assign policy X to subscription Y'..." rows="1" onkeydown="chatKeyDown(event)"></textarea>
+              <button class="btn btn-primary" id="chat-send-btn" onclick="sendChat()">Send</button>
+            </div>
+            <div class="hint" style="margin-top:6px">The agent has full context of your scan results. Try: "What's wrong with my custom policies?" or "Write a policy to require tags on all resources"</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Also show agent tab when no scan yet -->
+  <div id="agent-pre-scan" class="hidden">
+    <div class="card">
+      <div class="card-title">🤖 Policy Agent</div>
+      <p class="muted" style="font-size:.84rem">Run a scan first to use the Policy Agent with your subscription context. Or click the Agent tab after scanning.</p>
+    </div>
+  </div>
+
+</div>
+
+
+<!-- Auto Fix Modal -->
+<div class="modal-backdrop hidden" id="autofix-modal">
+  <div class="modal" style="width:640px">
+    <div class="modal-hdr warning" id="af-modal-hdr">
+      <div class="modal-title">🔧 <span id="af-title">Auto Fix - Replace Custom Policy with Built-in</span> <span class="b-warning-pill">REVIEW REQUIRED</span></div>
+      <div class="muted" style="font-size:.82rem;margin-top:4px" id="af-subtitle"></div>
+    </div>
+    <div class="modal-body">
+      <div class="modal-section">
+        <div class="modal-section-title">Built-in replacement</div>
+        <div class="modal-explanation" id="af-builtin-name" style="font-weight:700"></div>
+        <div style="font-size:.82rem;color:#605e5c;margin-top:4px" id="af-builtin-desc"></div>
+      </div>
+      <div class="modal-section">
+        <div class="modal-section-title">New assignment scope</div>
+        <input id="af-scope" class="inp" type="text" style="font-size:.84rem">
+      </div>
+      <div class="modal-section">
+        <div class="modal-section-title">New assignment display name</div>
+        <input id="af-display-name" class="inp" type="text" style="font-size:.84rem">
+      </div>
+      <div class="modal-section" id="af-params-section">
+        <div class="modal-section-title">Parameters <span class="muted" style="font-size:.72rem;text-transform:none" id="af-params-hint"></span></div>
+        <table class="param-table" id="af-params-table">
+          <thead><tr><th>Parameter</th><th>Value</th><th>Source</th></tr></thead>
+          <tbody id="af-params-body"></tbody>
+        </table>
+      </div>
+      <div class="modal-section" id="af-unmapped-section" style="display:none">
+        <div class="modal-section-title" style="color:#a4262c">Required parameters with no value found</div>
+        <div style="font-size:.82rem;color:#605e5c" id="af-unmapped-list"></div>
+      </div>
+      <div id="af-identity-note" class="hidden" style="background:#dce9f8;border:1px solid #90c3f5;border-radius:6px;padding:9px 12px;margin-bottom:12px;font-size:.82rem">
+        🔐 <strong>Managed Identity required:</strong> This policy uses DeployIfNotExists or Modify effect. A <strong>SystemAssigned managed identity</strong> will be created automatically with the assignment. You may need to grant it the appropriate roles after creation.
+      </div>
+      <div style="margin-top:14px">
+        <label style="display:flex;align-items:center;gap:8px;font-size:.84rem;cursor:pointer">
+          <input type="checkbox" id="af-delete-old">
+          Also delete the existing custom policy assignment after creating the built-in one
+        </label>
+      </div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn" style="background:#f3f2f1;border:1px solid #c8c6c4;color:#323130" onclick="closeAutofixModal()">Cancel</button>
+      <button class="btn btn-primary" id="af-confirm-btn" onclick="executeAutofix()">Create Assignment</button>
+    </div>
+  </div>
+</div>
+<!-- Drill-down Modal -->
+<div class="modal-backdrop hidden" id="drilldown-modal">
+  <div class="modal" style="width:720px;max-height:85vh">
+    <div class="modal-hdr danger">
+      <div class="modal-title">🔍 <span id="dd-title">Non-Compliant Resources</span></div>
+      <div class="muted" style="font-size:.82rem;margin-top:4px" id="dd-subtitle"></div>
+    </div>
+    <div class="modal-body" style="max-height:55vh;overflow-y:auto">
+      <div id="dd-body"><div class="tree-loading">Loading...</div></div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn" style="background:#f3f2f1;border:1px solid #c8c6c4;color:#323130" onclick="document.getElementById('drilldown-modal').classList.add('hidden')">Close</button>
+      <button class="btn btn-primary" id="dd-remediate-btn" onclick="triggerRemediation()" style="display:none">🔧 Trigger Remediation</button>
+    </div>
+  </div>
+</div>
+
+<!-- Confirmation Modal -->
+<div class="modal-backdrop hidden" id="confirm-modal">
+  <div class="modal">
+    <div class="modal-hdr" id="modal-hdr">
+      <div class="modal-title">
+        <span id="modal-icon">⚠️</span>
+        <span id="modal-title-text">Confirm Action</span>
+        <span id="modal-danger-pill" class="b-warning-pill">WARNING</span>
+      </div>
+      <div id="modal-subtitle" class="muted" style="font-size:.82rem;margin-top:4px"></div>
+    </div>
+    <div class="modal-body">
+      <div class="modal-section">
+        <div class="modal-section-title">Why this action</div>
+        <div class="modal-explanation" id="modal-explanation"></div>
+      </div>
+      <div class="modal-section">
+        <div class="modal-section-title">What will happen</div>
+        <div class="modal-what" id="modal-what"></div>
+      </div>
+      <div class="modal-section">
+        <div class="modal-section-title">Risk factors</div>
+        <ul class="modal-reasons" id="modal-reasons"></ul>
+      </div>
+      <div id="modal-danger-confirm" class="modal-confirm-check hidden">
+        <input type="checkbox" id="danger-ack" onchange="updateConfirmBtn()">
+        <label for="danger-ack">I understand the risks and want to proceed with this action</label>
+      </div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn" style="background:#f3f2f1;border:1px solid #c8c6c4;color:#323130" onclick="closeModal()">Cancel</button>
+      <button class="btn btn-danger" id="modal-confirm-btn" onclick="executeAction()">Confirm Action</button>
+    </div>
+  </div>
+</div>
+
 <script>
+// Minimal markdown renderer - no eval(), no new Function(), no CDN dependency
+const marked = {
+  parse: function(src) {
+    if (!src) return '';
+    let html = src
+      // Escape HTML first
+      .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+      // Code blocks (must be before inline code)
+      .replace(/```([\s\S]*?)```/g, function(m, code) {
+        return '<pre><code>' + code.trim() + '</code></pre>';
+      })
+      // Inline code
+      .replace(/`([^`]+)`/g, '<code>$1</code>')
+      // Headers
+      .replace(/^### (.+)$/gm, '<h3>$1</h3>')
+      .replace(/^## (.+)$/gm, '<h2>$1</h2>')
+      .replace(/^# (.+)$/gm, '<h1>$1</h1>')
+      // Bold
+      .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
+      .replace(/__([^_]+)__/g, '<strong>$1</strong>')
+      // Italic
+      .replace(/\*([^*]+)\*/g, '<em>$1</em>')
+      .replace(/_([^_]+)_/g, '<em>$1</em>')
+      // Unordered lists
+      .replace(/^[\*\-] (.+)$/gm, '<li>$1</li>')
+      // Ordered lists
+      .replace(/^\d+\. (.+)$/gm, '<li>$1</li>')
+      // Links
+      .replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank">$1</a>')
+      // Line breaks (double newline = paragraph break)
+      .replace(/\n\n/g, '</p><p>')
+      // Single newline = <br>
+      .replace(/\n/g, '<br>');
+    // Wrap consecutive <li> in <ul>
+    html = html.replace(/(<li>.*?<\/li>(<br>)?)+/gs, function(m) {
+      return '<ul>' + m.replace(/<br>/g, '') + '</ul>';
+    });
+    return '<p>' + html + '</p>';
+  }
+};
+</script>
 // =====================================================================
 // Auto Fix
 // =====================================================================
@@ -1158,811 +1961,6 @@ function showTab(name) {
 }
 
 </script>
-<style>
-*{box-sizing:border-box;margin:0;padding:0}
-body{font-family:'Segoe UI',Tahoma,sans-serif;background:#f0f2f5;color:#1f1f1f;font-size:14px}
-.hdr{background:linear-gradient(135deg,#0078d4,#005a9e);color:#fff;padding:14px 32px;display:flex;align-items:center;gap:16px;box-shadow:0 2px 10px rgba(0,0,0,.25)}
-.hdr-logo{width:36px;height:36px;background:rgba(255,255,255,.15);border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:1.3rem}
-.hdr h1{font-size:1.2rem;font-weight:600}.hdr-sub{font-size:.78rem;opacity:.75;margin-top:1px}
-.hdr-status{margin-left:auto;font-size:.8rem;background:rgba(255,255,255,.12);padding:4px 12px;border-radius:20px;display:flex;align-items:center;gap:6px}
-.status-dot{width:8px;height:8px;border-radius:50%;background:#f7c948}.status-dot.ok{background:#54d45a}
-.wrap{max-width:1400px;margin:0 auto;padding:24px}
-.card{background:#fff;border-radius:10px;box-shadow:0 2px 8px rgba(0,0,0,.08);padding:24px;margin-bottom:20px}
-.card-title{font-size:.95rem;font-weight:700;color:#1f1f1f;margin-bottom:16px;padding-bottom:10px;border-bottom:2px solid #0078d4;display:flex;align-items:center;gap:8px}
-.form-row{display:grid;grid-template-columns:1fr 1fr;gap:24px;align-items:start}
-.form-group{margin-bottom:14px}
-.lbl{display:block;font-size:.8rem;font-weight:600;color:#605e5c;margin-bottom:5px}
-.inp{width:100%;padding:8px 11px;border:1px solid #c8c6c4;border-radius:5px;font-size:.875rem;transition:border .15s}
-.inp:focus{border-color:#0078d4;outline:none;box-shadow:0 0 0 2px rgba(0,120,212,.18)}
-.hint{font-size:.75rem;color:#8a8886;margin-top:4px}
-.btn{padding:8px 20px;border:none;border-radius:5px;font-size:.875rem;font-weight:600;cursor:pointer;transition:all .15s;display:inline-flex;align-items:center;gap:6px}
-.btn-primary{background:#0078d4;color:#fff}.btn-primary:hover:not(:disabled){background:#106ebe}.btn-primary:disabled{background:#a0a0a0;cursor:not-allowed}
-.btn-danger{background:#a4262c;color:#fff}.btn-danger:hover:not(:disabled){background:#8a1e24}
-.btn-warn{background:#f7c300;color:#1f1f1f}.btn-warn:hover:not(:disabled){background:#e0b000}
-.btn-sm{padding:5px 13px;font-size:.8rem}
-.badge{display:inline-block;padding:2px 9px;border-radius:11px;font-size:.72rem;font-weight:700;white-space:nowrap}
-.b-err{background:#fde7e9;color:#a4262c}.b-warn{background:#fff4ce;color:#7a4100}.b-info{background:#dce9f8;color:#004578}.b-ok{background:#dff6dd;color:#107c10}
-.b-danger-pill{background:#a4262c;color:#fff;padding:3px 10px;border-radius:11px;font-size:.78rem;font-weight:700}
-.b-warning-pill{background:#f7c300;color:#1f1f1f;padding:3px 10px;border-radius:11px;font-size:.78rem;font-weight:700}
-.b-safe-pill{background:#107c10;color:#fff;padding:3px 10px;border-radius:11px;font-size:.78rem;font-weight:700}
-.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:14px;margin-bottom:22px}
-.stat{background:#fff;border-radius:8px;padding:16px 14px;text-align:center;box-shadow:0 2px 6px rgba(0,0,0,.07);border-top:3px solid #0078d4}
-.stat.s-err{border-top-color:#a4262c}.stat.s-warn{border-top-color:#f7c300}.stat.s-ok{border-top-color:#107c10}
-.stat-n{font-size:1.9rem;font-weight:800;line-height:1}.stat-l{font-size:.75rem;color:#605e5c;margin-top:5px}
-.n-err{color:#a4262c}.n-warn{color:#7a4100}.n-ok{color:#107c10}.n-blue{color:#0078d4}
-.tabs{display:flex;gap:2px;border-bottom:2px solid #edebe9;margin-bottom:22px;flex-wrap:wrap}
-.tab{padding:10px 20px;cursor:pointer;font-size:.875rem;font-weight:600;color:#605e5c;border-bottom:3px solid transparent;margin-bottom:-2px;transition:all .15s;border-radius:5px 5px 0 0}
-.tab:hover{color:#0078d4;background:#f3f9ff}.tab.active{color:#0078d4;border-bottom-color:#0078d4;background:#f0f7ff}
-.tab-badge{background:#0078d4;color:#fff;border-radius:10px;padding:1px 7px;font-size:.7rem;margin-left:6px}
-.tab-badge.red{background:#a4262c}.tab-badge.amber{background:#f7c300;color:#1f1f1f}
-.tc{display:none}.tc.active{display:block}
-.tbl-wrap{overflow-x:auto}
-table{width:100%;border-collapse:collapse}
-th{text-align:left;padding:10px 12px;background:#faf9f8;font-weight:700;font-size:.8rem;color:#323130;border-bottom:2px solid #edebe9;white-space:nowrap}
-td{padding:9px 12px;border-bottom:1px solid #f3f2f1;vertical-align:middle}
-tr.clickable{cursor:pointer}tr.clickable:hover td{background:#faf9f8}
-.exp-row{display:none}.exp-row.open{display:table-row}
-.exp-row td{background:#faf9f8;padding:12px 20px}
-.detail-box{background:#fff;border:1px solid #edebe9;border-radius:7px;padding:16px}
-.detail-desc{font-size:.82rem;color:#605e5c;margin-bottom:12px;padding-bottom:10px;border-bottom:1px solid #edebe9}
-.issue-item{display:flex;gap:10px;padding:8px 0;border-bottom:1px solid #f3f2f1}.issue-item:last-child{border-bottom:none}
-.issue-icon{font-size:1rem;flex-shrink:0;line-height:1.4}
-.issue-msg{font-weight:600;font-size:.84rem}.issue-fix{font-size:.78rem;color:#605e5c;margin-top:2px}.fix-kw{color:#0078d4;font-weight:600}
-.arr{display:inline-block;transition:transform .18s;color:#0078d4;font-size:.8rem}.arr.open{transform:rotate(90deg)}
-.progress-bar{height:5px;background:#edebe9;border-radius:3px;overflow:hidden;margin-top:8px}
-.progress-fill{height:100%;background:linear-gradient(90deg,#0078d4,#2899f5);border-radius:3px;transition:width .4s}
-.alert{padding:10px 14px;border-radius:6px;margin-bottom:14px;font-size:.84rem}
-.a-err{background:#fde7e9;color:#a4262c;border:1px solid #f1707b}.a-info{background:#dce9f8;color:#004578;border:1px solid #2899f5}
-.a-warn{background:#fff4ce;color:#7a4100;border:1px solid #f7c300}
-.spin{display:inline-block;width:16px;height:16px;border:2px solid rgba(255,255,255,.3);border-top-color:#fff;border-radius:50%;animation:spin .7s linear infinite}
-.spin-dark{border-color:rgba(0,120,212,.2);border-top-color:#0078d4}
-@keyframes spin{to{transform:rotate(360deg)}}
-.empty{text-align:center;padding:40px 20px;color:#605e5c}.empty-icon{font-size:2.8rem;margin-bottom:10px}.empty p{font-size:.875rem;line-height:1.6}
-.rec-card{border:1px solid #edebe9;border-radius:8px;margin-bottom:14px;overflow:hidden}
-.rec-hdr{display:flex;align-items:center;justify-content:space-between;padding:12px 16px;background:#faf9f8;border-bottom:1px solid #edebe9}
-.rec-custom-name{font-weight:700;font-size:.9rem}.rec-body{padding:14px 16px}
-.match-item{display:flex;align-items:flex-start;gap:12px;padding:10px;border:1px solid #edebe9;border-radius:6px;margin-bottom:8px;transition:border .15s,background .15s}
-.match-item:hover{border-color:#0078d4;background:#f3f9ff}
-.match-score{background:#0078d4;color:#fff;padding:4px 9px;border-radius:11px;font-size:.72rem;font-weight:700;white-space:nowrap;align-self:flex-start;margin-top:2px}
-.match-score.hi{background:#107c10}.match-name{font-weight:700;font-size:.875rem}
-.match-desc{font-size:.78rem;color:#605e5c;margin-top:2px}.match-why{font-size:.74rem;color:#0078d4;margin-top:3px}
-.match-meta{margin-top:5px;display:flex;gap:6px;align-items:center;flex-wrap:wrap}
-.tag{display:inline-block;background:#f3f2f1;padding:1px 8px;border-radius:3px;font-size:.72rem;color:#323130}
-.portal-link{font-size:.75rem;color:#0078d4;text-decoration:none}.portal-link:hover{text-decoration:underline}
-.filter-bar{display:flex;gap:10px;margin-bottom:14px;flex-wrap:wrap;align-items:center}
-.filter-btn{padding:5px 13px;border-radius:15px;border:1px solid #c8c6c4;background:#fff;font-size:.8rem;cursor:pointer;transition:all .15s}
-.filter-btn.active{background:#0078d4;color:#fff;border-color:#0078d4}
-.search-inp{padding:6px 11px;border:1px solid #c8c6c4;border-radius:15px;font-size:.8rem;width:220px}
-.search-inp:focus{outline:none;border-color:#0078d4}
-.muted{color:#8a8886}
-/* MG Tree */
-.mg-wrap{border:1px solid #edebe9;border-radius:6px;max-height:280px;overflow-y:auto;background:#faf9f8}
-.mg-node{margin:1px 0}
-.mg-hdr{display:flex;align-items:center;gap:6px;padding:5px 8px;cursor:pointer;border-radius:4px;user-select:none}
-.mg-hdr:hover{background:#e8f0fb}
-.mg-arrow{width:14px;text-align:center;font-size:.68rem;color:#0078d4;flex-shrink:0;transition:transform .15s}
-.mg-name{font-size:.84rem;font-weight:600}
-.mg-children{padding-left:18px}.mg-children.hidden{display:none}
-.tree-sub{display:flex;align-items:center;gap:7px;padding:4px 8px;border-radius:4px}
-.tree-sub:hover{background:#e8f0fb}
-.tree-sub label{cursor:pointer;font-size:.84rem;flex:1}
-.tree-loading{padding:16px;color:#605e5c;font-size:.84rem;text-align:center}
-/* Scan status */
-.scan-sub-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:6px;margin-top:10px}
-.scan-sub-item{display:flex;align-items:center;gap:8px;padding:7px 10px;border-radius:5px;font-size:.82rem;border:1px solid}
-.scan-sub-item.scanning{background:#dce9f8;border-color:#90c3f5}
-.scan-sub-item.done{background:#dff6dd;border-color:#92d9a0}
-.scan-sub-item.error{background:#fde7e9;border-color:#f4a6ab}
-.sub-stat-name{font-weight:600;flex:1}.sub-stat-detail{font-size:.73rem;color:#605e5c;margin-left:4px}
-/* Cache indicator */
-.cache-pill{display:inline-flex;align-items:center;gap:5px;font-size:.75rem;padding:3px 9px;border-radius:11px;border:1px solid}
-.cache-fresh{background:#dff6dd;color:#107c10;border-color:#92d9a0}
-.cache-stale{background:#fff4ce;color:#7a4100;border-color:#f7c300}
-.cache-empty{background:#f3f2f1;color:#605e5c;border-color:#c8c6c4}
-/* ---- AGENT CHAT ---- */
-.agent-layout{display:grid;grid-template-columns:280px 1fr;gap:20px;height:600px}
-.agent-sidebar{display:flex;flex-direction:column;gap:16px}
-.agent-cfg{background:#faf9f8;border:1px solid #edebe9;border-radius:8px;padding:14px}
-.agent-cfg-title{font-size:.82rem;font-weight:700;margin-bottom:10px;color:#323130}
-.agent-type-row{display:flex;gap:6px;margin-bottom:10px}
-.type-btn{flex:1;padding:5px 8px;border:1px solid #c8c6c4;background:#fff;border-radius:4px;font-size:.78rem;cursor:pointer;text-align:center}
-.type-btn.active{background:#0078d4;color:#fff;border-color:#0078d4}
-.agent-context-box{background:#faf9f8;border:1px solid #edebe9;border-radius:8px;padding:14px;font-size:.78rem;color:#605e5c;flex:1;overflow-y:auto}
-.agent-context-title{font-size:.82rem;font-weight:700;margin-bottom:8px;color:#323130}
-.agent-main{display:flex;flex-direction:column}
-.chat-messages{flex:1;overflow-y:auto;border:1px solid #edebe9;border-radius:8px;padding:14px;background:#fafafa;display:flex;flex-direction:column;gap:12px}
-.chat-msg{max-width:90%;padding:12px 14px;border-radius:10px;font-size:.875rem;line-height:1.6}
-.chat-msg.user{background:#0078d4;color:#fff;align-self:flex-end;border-radius:10px 10px 2px 10px}
-.chat-msg.assistant{background:#fff;border:1px solid #edebe9;align-self:flex-start;border-radius:2px 10px 10px 10px}
-.chat-msg.system{background:#fff4ce;border:1px solid #f7c300;align-self:center;text-align:center;font-size:.8rem;max-width:100%;border-radius:6px;padding:8px 14px}
-.chat-msg .markdown-body h1,.chat-msg .markdown-body h2,.chat-msg .markdown-body h3{font-size:.95rem;margin:.6em 0 .3em}
-.chat-msg .markdown-body p{margin:.4em 0}
-.chat-msg .markdown-body ul,.chat-msg .markdown-body ol{padding-left:1.2em;margin:.3em 0}
-.chat-msg .markdown-body code{background:#f3f2f1;padding:1px 5px;border-radius:3px;font-size:.82rem;font-family:monospace}
-.chat-msg.assistant .markdown-body code{background:#f0f2f5}
-.chat-msg .markdown-body pre{background:#1f1f1f;color:#d4d4d4;padding:12px;border-radius:6px;overflow-x:auto;margin:.5em 0}
-.chat-msg .markdown-body pre code{background:none;padding:0;color:inherit}
-.chat-input-row{display:flex;gap:8px;margin-top:10px;align-items:flex-end}
-.chat-input{flex:1;padding:9px 12px;border:1px solid #c8c6c4;border-radius:8px;font-size:.875rem;resize:none;min-height:40px;max-height:120px;font-family:inherit}
-.chat-input:focus{outline:none;border-color:#0078d4}
-/* Policy JSON card */
-.json-card{background:#1e1e1e;border-radius:8px;margin-top:10px;overflow:hidden}
-.json-card-hdr{display:flex;align-items:center;justify-content:space-between;padding:8px 14px;background:#252526}
-.json-card-title{color:#9cdcfe;font-size:.82rem;font-weight:600;font-family:monospace}
-.json-copy-btn{padding:3px 10px;background:#0078d4;color:#fff;border:none;border-radius:3px;font-size:.75rem;cursor:pointer}
-.json-copy-btn:hover{background:#106ebe}
-.json-body{padding:14px;overflow-x:auto;font-size:.8rem;font-family:monospace;color:#d4d4d4;white-space:pre}
-/* Confirmation modal */
-.modal-backdrop{position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:1000;display:flex;align-items:center;justify-content:center}
-.modal-backdrop.hidden{display:none!important}
-.step-done-ico{color:#107c10}
-.step-active-ico{color:#0078d4}
-.step-pending-ico{color:#8a8886}
-/* Projects tab */
-.proj-card{border:1px solid #edebe9;border-radius:10px;margin-bottom:18px;overflow:hidden;transition:box-shadow .15s}
-.proj-card:hover{box-shadow:0 4px 14px rgba(0,0,0,.10)}
-.proj-hdr{padding:16px 20px;background:#faf9f8;border-bottom:1px solid #edebe9;display:flex;align-items:center;justify-content:space-between;gap:12px}
-.proj-title{font-size:1rem;font-weight:700;color:#1f1f1f;flex:1}
-.proj-meta{font-size:.78rem;color:#605e5c;margin-top:3px}
-.proj-progress-wrap{width:180px;flex-shrink:0}
-.proj-progress-bar{height:8px;background:#edebe9;border-radius:4px;overflow:hidden;margin-top:5px}
-.proj-progress-fill{height:100%;border-radius:4px;transition:width .6s}
-.proj-body{padding:16px 20px}
-.task-item{display:flex;align-items:flex-start;gap:12px;padding:10px 0;border-bottom:1px solid #f3f2f1}
-.task-item:last-child{border-bottom:none}
-.task-check{width:18px;height:18px;border-radius:50%;border:2px solid #c8c6c4;background:#fff;flex-shrink:0;cursor:pointer;display:flex;align-items:center;justify-content:center;margin-top:1px;transition:all .15s}
-.task-check.done{background:#107c10;border-color:#107c10;color:#fff}
-.task-check.in-progress{background:#0078d4;border-color:#0078d4;color:#fff}
-.task-title{font-size:.875rem;flex:1}
-.task-title.done-text{text-decoration:line-through;color:#8a8886}
-.task-status-sel{font-size:.78rem;border:1px solid #edebe9;border-radius:4px;padding:2px 6px;background:#fff;cursor:pointer}
-.proj-add-btn{background:#f3f9ff;border:1px dashed #0078d4;color:#0078d4;border-radius:6px;padding:8px;width:100%;text-align:center;cursor:pointer;font-size:.82rem;margin-top:8px}
-.proj-add-btn:hover{background:#dce9f8}
-.new-proj-form{background:#faf9f8;border:1px solid #edebe9;border-radius:10px;padding:20px;margin-bottom:18px}
-.form-inline{display:grid;grid-template-columns:1fr 1fr auto;gap:12px;align-items:end}
-.priority-badge{padding:2px 8px;border-radius:3px;font-size:.72rem;font-weight:700}
-.p-high{background:#fde7e9;color:#a4262c}
-.p-medium{background:#fff4ce;color:#7a4100}
-.p-low{background:#dff6dd;color:#107c10}
-.btn-dismiss{background:none;border:1px solid #c8c6c4;color:#605e5c;padding:3px 10px;border-radius:4px;font-size:.75rem;cursor:pointer;transition:all .15s}
-.btn-dismiss:hover{background:#fde7e9;border-color:#f1707b;color:#a4262c}
-.btn-undismiss{background:#f3f2f1;border:1px solid #c8c6c4;color:#605e5c;padding:3px 10px;border-radius:4px;font-size:.75rem;cursor:pointer}
-.nc-badge-critical{background:#a4262c;color:#fff;padding:2px 8px;border-radius:3px;font-size:.72rem;font-weight:700}
-.nc-badge-warn{background:#fff4ce;color:#7a4100;padding:2px 8px;border-radius:3px;font-size:.72rem;font-weight:700}
-.nc-badge-ok{background:#dff6dd;color:#107c10;padding:2px 8px;border-radius:3px;font-size:.72rem;font-weight:700}
-.dismissed-row td{opacity:.4}
-.scan-console{background:#1e1e1e;border-radius:6px;padding:10px 12px;margin-top:10px;font-family:monospace;font-size:.76rem;color:#cccccc;height:120px;overflow-y:auto;line-height:1.6;white-space:pre-wrap;word-break:break-all}
-.scan-console .log-warn{color:#f7c948}
-.scan-console .log-error{color:#f14c4c}
-.scan-console .log-ok{color:#4caf50}
-.scan-console .log-info{color:#9cdcfe}
-.modal{background:#fff;border-radius:12px;width:560px;max-width:95vw;max-height:90vh;overflow-y:auto;box-shadow:0 8px 40px rgba(0,0,0,.3)}
-.modal-hdr{padding:20px 24px 14px;border-bottom:2px solid}
-.modal-hdr.danger{border-bottom-color:#a4262c}
-.modal-hdr.warning{border-bottom-color:#f7c300}
-.modal-hdr.safe{border-bottom-color:#107c10}
-.modal-title{font-size:1.1rem;font-weight:700;margin-bottom:6px;display:flex;align-items:center;gap:10px}
-.modal-body{padding:20px 24px}
-.modal-section{margin-bottom:16px}
-.modal-section-title{font-size:.8rem;font-weight:700;color:#605e5c;text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px}
-.modal-explanation{font-size:.875rem;line-height:1.6}
-.modal-what{background:#faf9f8;border:1px solid #edebe9;border-radius:6px;padding:12px;font-size:.84rem;line-height:1.6}
-.modal-reasons{list-style:none;padding:0}
-.modal-reasons li{display:flex;gap:8px;padding:5px 0;font-size:.84rem}
-.modal-reasons li::before{content:'⚠';flex-shrink:0}
-.danger .modal-reasons li::before{content:'🔴'}
-.modal-confirm-check{display:flex;align-items:center;gap:8px;background:#fde7e9;border:1px solid #f1707b;border-radius:6px;padding:10px 12px;margin-bottom:16px;font-size:.84rem}
-.modal-confirm-check input{width:16px;height:16px;cursor:pointer}
-.modal-actions{display:flex;gap:10px;justify-content:flex-end;padding:16px 24px;border-top:1px solid #edebe9}
-.hidden{display:none!important}
-/* Autofix */
-.autofix-btn{background:#107c10;color:#fff;border:none;padding:5px 13px;border-radius:4px;font-size:.78rem;font-weight:700;cursor:pointer;display:inline-flex;align-items:center;gap:5px}
-.autofix-btn:hover{background:#0e6b0e}
-.autofix-btn:disabled{background:#a0a0a0;cursor:not-allowed}
-.param-table{width:100%;border-collapse:collapse;font-size:.78rem;margin-top:6px}
-.param-table th{text-align:left;padding:5px 8px;background:#faf9f8;border-bottom:1px solid #edebe9;font-weight:700}
-.param-table td{padding:5px 8px;border-bottom:1px solid #f3f2f1}
-.param-src-exact{color:#107c10;font-size:.7rem}
-.param-src-fuzzy{color:#f7c300;font-size:.7rem}
-.param-src-default{color:#8a8886;font-size:.7rem}
-.param-src-missing{color:#a4262c;font-weight:700;font-size:.7rem}
-.param-input{width:100%;padding:4px 7px;border:1px solid #c8c6c4;border-radius:3px;font-size:.78rem}
-.assignment-tag{display:inline-flex;align-items:center;gap:5px;background:#dce9f8;color:#004578;border-radius:4px;padding:2px 8px;font-size:.73rem;margin-top:4px}
-.match-selector-item:hover{border-color:#0078d4;background:#f0f7ff}
-.match-selector-item.selected{border-color:#0078d4;background:#f0f7ff}
-</style>
-<script>
-// Minimal markdown renderer - no eval(), no new Function(), no CDN dependency
-const marked = {
-  parse: function(src) {
-    if (!src) return '';
-    let html = src
-      // Escape HTML first
-      .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
-      // Code blocks (must be before inline code)
-      .replace(/```([\s\S]*?)```/g, function(m, code) {
-        return '<pre><code>' + code.trim() + '</code></pre>';
-      })
-      // Inline code
-      .replace(/`([^`]+)`/g, '<code>$1</code>')
-      // Headers
-      .replace(/^### (.+)$/gm, '<h3>$1</h3>')
-      .replace(/^## (.+)$/gm, '<h2>$1</h2>')
-      .replace(/^# (.+)$/gm, '<h1>$1</h1>')
-      // Bold
-      .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
-      .replace(/__([^_]+)__/g, '<strong>$1</strong>')
-      // Italic
-      .replace(/\*([^*]+)\*/g, '<em>$1</em>')
-      .replace(/_([^_]+)_/g, '<em>$1</em>')
-      // Unordered lists
-      .replace(/^[\*\-] (.+)$/gm, '<li>$1</li>')
-      // Ordered lists
-      .replace(/^\d+\. (.+)$/gm, '<li>$1</li>')
-      // Links
-      .replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank">$1</a>')
-      // Line breaks (double newline = paragraph break)
-      .replace(/\n\n/g, '</p><p>')
-      // Single newline = <br>
-      .replace(/\n/g, '<br>');
-    // Wrap consecutive <li> in <ul>
-    html = html.replace(/(<li>.*?<\/li>(<br>)?)+/gs, function(m) {
-      return '<ul>' + m.replace(/<br>/g, '') + '</ul>';
-    });
-    return '<p>' + html + '</p>';
-  }
-};
-</script>
-</head>
-<body>
-
-<div class="hdr">
-  <div class="hdr-logo">🛡</div>
-  <div><h1>Azure Policy Analyzer</h1><div class="hdr-sub">Custom policy health check, recommendations, and AI-powered agent</div></div>
-  <div class="hdr-status" id="hdr-status"><span class="status-dot" id="status-dot"></span><span id="status-text">Not connected</span></div>
-</div>
-
-<div class="wrap">
-
-  <!-- Connect panel -->
-  <div class="card" id="connect-card">
-    <div class="card-title">🔐 Connect to Azure</div>
-    <div class="form-row">
-      <div>
-        <div class="form-group">
-          <label class="lbl" for="tenant-id">Tenant ID <span class="muted">(optional)</span></label>
-          <input id="tenant-id" class="inp" type="text" placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx">
-          <div class="hint">Leave blank to use your default Azure directory</div>
-        </div>
-        <div id="conn-alert"></div>
-        <button class="btn btn-primary" id="conn-btn" onclick="connectAzure()">Connect to Azure</button>
-        <div class="hint" style="margin-top:8px">A browser window will open for Microsoft sign-in</div>
-        <div style="margin-top:14px">
-          <span class="agent-cfg-title" style="display:block;margin-bottom:6px;font-size:.8rem;font-weight:700;color:#605e5c">Built-in Policy Cache</span>
-          <span id="cache-status-pill" class="cache-pill cache-empty">Loading...</span>
-          <button class="btn btn-sm" style="margin-left:8px;background:#f3f2f1;border:1px solid #c8c6c4;color:#323130" onclick="refreshCache()">Refresh</button>
-        </div>
-      </div>
-
-      <div id="sub-panel" class="hidden">
-        <div class="form-group">
-          <label class="lbl">Scope - select subscriptions to analyze</label>
-          <div class="mg-wrap" id="mg-tree-el">
-            <div class="tree-loading"><span class="spin spin-dark" style="width:14px;height:14px;border-width:2px"></span> Loading management groups...</div>
-          </div>
-          <div class="hint" style="margin-top:5px;display:flex;justify-content:space-between">
-            <span id="sel-count">0 selected</span>
-            <span><a href="#" onclick="selectAll(true);return false" style="color:#0078d4;font-size:.75rem">Select all</a> &nbsp; <a href="#" onclick="selectAll(false);return false" style="color:#0078d4;font-size:.75rem">Clear</a></span>
-          </div>
-        </div>
-        <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
-          <button class="btn btn-primary" id="scan-btn" onclick="startScan()">🔍 Analyze Policies</button>
-          <button class="btn hidden" id="stop-btn" style="background:#a4262c;color:#fff" onclick="stopScan()">⏹ Stop Scan</button>
-        </div>
-        <div id="scan-progress" class="hidden" style="margin-top:16px">
-          <!-- Main progress bar -->
-          <div style="background:#faf9f8;border:1px solid #edebe9;border-radius:8px;padding:14px">
-            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
-              <div style="display:flex;align-items:center;gap:8px">
-                <span class="spin spin-dark" id="scan-spinner" style="width:14px;height:14px;border-width:2px"></span>
-                <span style="font-size:.84rem;font-weight:600" id="scan-global-msg">Starting scan...</span>
-              </div>
-              <span class="muted" style="font-size:.78rem" id="scan-pct-label">0%</span>
-            </div>
-            <!-- Segmented progress bar -->
-            <div style="height:10px;background:#edebe9;border-radius:5px;overflow:hidden;position:relative">
-              <div id="scan-bar-fill" style="height:100%;background:linear-gradient(90deg,#0078d4,#2899f5);border-radius:5px;width:0%;transition:width .5s ease-in-out"></div>
-            </div>
-            <!-- Step indicators -->
-            <div style="display:flex;justify-content:space-between;margin-top:6px;font-size:.7rem;color:#8a8886">
-              <span id="step-auth" style="display:flex;align-items:center;gap:3px">⬜ Auth</span>
-              <span id="step-builtins" style="display:flex;align-items:center;gap:3px">⬜ Built-ins</span>
-              <span id="step-scan" style="display:flex;align-items:center;gap:3px">⬜ Scanning</span>
-              <span id="step-analyze" style="display:flex;align-items:center;gap:3px">⬜ Analysis</span>
-              <span id="step-done" style="display:flex;align-items:center;gap:3px">⬜ Done</span>
-            </div>
-            <!-- Last activity timestamp -->
-            <div style="margin-top:8px;font-size:.72rem;color:#8a8886" id="scan-last-activity"></div>
-          </div>
-          <!-- Per-subscription status grid -->
-          <div class="scan-sub-grid" id="scan-sub-grid" style="margin-top:10px"></div>
-          <!-- Live console log -->
-          <div class="scan-console" id="scan-console"><span style="color:#569cd6">Azure Policy Analyzer</span> - waiting for scan output...</div>
-        </div>
-        <div id="scan-alert" class="hidden" style="margin-top:10px"></div>
-      </div>
-    </div>
-  </div>
-
-  <!-- Results -->
-  <div id="results" class="hidden">
-    <div class="stats" id="stats"></div>
-    <div class="tabs">
-      <div class="tab" id="tab-btn-compliance" onclick="showTab('compliance')">Non-Compliance <span class="tab-badge red" id="tbadge-compliance">0</span></div>
-      <div class="tab" id="tab-btn-custom" onclick="showTab('custom')">Custom Policy Issues <span class="tab-badge amber" id="tbadge-custom">0</span></div>
-      <div class="tab active" id="tab-btn-dashboard" onclick="showTab('dashboard')">📊 Dashboard</div>
-      <div class="tab" id="tab-btn-recs" onclick="showTab('recs')">🔄 Built-in Replacements <span class="tab-badge" id="tbadge-recs">0</span></div>
-      <div class="tab" id="tab-btn-agent" onclick="showTab('agent')">🤖 Policy Agent</div>
-      <div class="tab" id="tab-btn-projects" onclick="showTab('projects')">📋 Projects</div>
-      <div class="tab" id="tab-btn-insights" onclick="showTab('insights')">🔎 Insights <span class="tab-badge" id="tbadge-insights">0</span></div>
-      <div class="tab" id="tab-btn-insights" onclick="showTab('insights')">🔎 Insights <span class="tab-badge" id="tbadge-insights">0</span></div>
-    </div>
-
-    <div class="tc" id="tc-compliance">
-      <div class="card"><div class="card-title">Non-Compliant Policy Assignments</div><div id="compliance-body"></div></div>
-    </div>
-    <div class="tc" id="tc-custom">
-      <div class="card">
-        <div class="card-title">Custom Policy Definitions - Health Check</div>
-        <div class="filter-bar">
-          <button class="filter-btn active" onclick="filterCustom('all',this)">All</button>
-          <button class="filter-btn" onclick="filterCustom('error',this)">🔴 Errors</button>
-          <button class="filter-btn" onclick="filterCustom('warning',this)">🟡 Warnings</button>
-          <button class="filter-btn" onclick="filterCustom('ok',this)">✅ Healthy</button>
-          <input class="search-inp" id="custom-search" type="text" placeholder="Search policies..." oninput="searchCustom(this.value)">
-        </div>
-        <div id="custom-body"></div>
-      </div>
-    </div>
-    <div class="tc" id="tc-recs">
-      <div class="card">
-        <div class="card-title">
-          🔄 Built-in Policy Replacements
-          <span class="badge b-ok" style="font-size:.72rem;margin-left:8px">Auto-updates with Azure</span>
-        </div>
-        <div style="background:#dff6dd;border:1px solid #92d9a0;border-radius:8px;padding:12px 16px;margin-bottom:18px;font-size:.84rem;line-height:1.6">
-          <strong>Goal:</strong> Replace your custom policies with Microsoft-maintained built-in equivalents.
-          Built-in policies are updated automatically when Azure APIs change - no more broken definitions or outdated policy rules.
-          Click <strong>Auto Fix</strong> on any row to create the new assignment instantly.
-        </div>
-        <div class="filter-bar" style="flex-wrap:wrap;gap:8px">
-          <button class="filter-btn active" data-recs-filter="all" onclick="setRecsFilter('all',this)">All</button>
-          <button class="filter-btn" data-recs-filter="non_compliant" onclick="setRecsFilter('non_compliant',this)">🔴 Has Non-Compliant</button>
-          <button class="filter-btn" data-recs-filter="dismissed" onclick="setRecsFilter('dismissed',this)">🙈 Dismissed</button>
-          <button class="filter-btn" data-recs-filter="assigned" onclick="setRecsFilter('assigned',this)">📌 Already Assigned</button>
-          <button class="filter-btn" data-recs-filter="unassigned" onclick="setRecsFilter('unassigned',this)">No Assignment</button>
-          <button class="filter-btn" data-recs-filter="error" onclick="setRecsFilter('error',this)">🔴 Has Issues</button>
-          <select class="search-inp" id="recs-op-filter" onchange="applyRecsFilters()" style="width:190px;padding:5px 10px">
-            <option value="">All operations</option>
-          </select>
-          <select class="search-inp" id="recs-cat-filter" onchange="applyRecsFilters()" style="width:160px;padding:5px 10px">
-            <option value="">All categories</option>
-          </select>
-          <input class="search-inp" id="recs-search" type="text" placeholder="Search name..." oninput="applyRecsFilters()" style="width:200px">
-          <span class="muted" style="font-size:.8rem;margin-left:4px" id="recs-count-label"></span>
-        </div>
-        <div id="recs-body"></div>
-      </div>
-    </div>
-
-
-
-    <!-- DASHBOARD TAB -->
-    <div class="tc active" id="tc-dashboard">
-      <div style="display:grid;grid-template-columns:1fr 1fr 1fr 320px;gap:16px;align-items:start">
-
-        <!-- Policy Compliance donut -->
-        <div class="card" style="padding:18px">
-          <div style="font-size:.85rem;font-weight:600;color:#323130;margin-bottom:12px;display:flex;align-items:center;justify-content:space-between">
-            Policy Compliance
-            <a id="link-policy-compliance" href="#" target="_blank" style="font-size:.72rem;color:#0078d4">View in Portal ↗</a>
-          </div>
-          <div style="display:flex;align-items:center;gap:18px">
-            <svg id="donut-policy" width="110" height="110" viewBox="0 0 110 110"></svg>
-            <div id="legend-policy" style="font-size:.78rem;line-height:1.9"></div>
-          </div>
-        </div>
-
-        <!-- Initiative Compliance donut -->
-        <div class="card" style="padding:18px">
-          <div style="font-size:.85rem;font-weight:600;color:#323130;margin-bottom:12px;display:flex;align-items:center;justify-content:space-between">
-            Initiative Compliance
-            <a href="https://portal.azure.com/#view/Microsoft_Azure_Policy/PolicyMenuBlade/~/Compliance" target="_blank" style="font-size:.72rem;color:#0078d4">View in Portal ↗</a>
-          </div>
-          <div style="display:flex;align-items:center;gap:18px">
-            <svg id="donut-initiative" width="110" height="110" viewBox="0 0 110 110"></svg>
-            <div id="legend-initiative" style="font-size:.78rem;line-height:1.9"></div>
-          </div>
-        </div>
-
-        <!-- Overall resource compliance + pending remediation -->
-        <div style="display:flex;flex-direction:column;gap:16px">
-          <div class="card" style="padding:18px">
-            <div style="font-size:.85rem;font-weight:600;color:#323130;margin-bottom:10px;display:flex;align-items:center;justify-content:space-between">
-              Overall Resource Compliance
-              <a id="link-resource-compliance" href="#" target="_blank" style="font-size:.72rem;color:#0078d4">↗</a>
-            </div>
-            <div id="resource-pct" style="font-size:2.4rem;font-weight:800;line-height:1;color:#1f1f1f">-</div>
-            <div id="resource-bar-wrap" style="margin-top:10px">
-              <div style="height:8px;background:#edebe9;border-radius:4px;overflow:hidden">
-                <div id="resource-bar" style="height:100%;background:#107c10;border-radius:4px;width:0%;transition:width .8s"></div>
-              </div>
-              <div id="resource-label" style="font-size:.75rem;color:#605e5c;margin-top:5px"></div>
-            </div>
-          </div>
-          <div class="card" style="padding:18px;cursor:pointer" id="pending-card" onclick="showTab('compliance')">
-            <div style="font-size:.85rem;font-weight:600;color:#323130;margin-bottom:6px">Pending Remediation</div>
-            <div style="display:flex;align-items:center;gap:14px">
-              <div id="pending-count" style="font-size:2.4rem;font-weight:800;color:#c73b00;line-height:1">-</div>
-              <div style="font-size:.78rem;color:#605e5c;line-height:1.4">Remediable assignments with non-compliant resources</div>
-            </div>
-          </div>
-        </div>
-
-        <!-- Recommended Assignments -->
-        <div class="card" style="padding:18px">
-          <div style="font-size:.88rem;font-weight:700;color:#323130;margin-bottom:14px;display:flex;align-items:center;gap:6px">
-            💡 Recommended Assignments
-          </div>
-          <div id="recommended-assignments">
-            <div class="muted" style="font-size:.82rem">Run a scan to see recommendations.</div>
-          </div>
-        </div>
-
-      </div>
-
-      <!-- ALZ Score -->
-      <div class="card" style="margin-top:16px">
-        <div class="card-title" style="display:flex;align-items:center;justify-content:space-between">
-          🏆 ALZ Compliance Score
-          <a href="https://github.com/Azure/Enterprise-Scale/wiki/ALZ-Policies" target="_blank" style="font-size:.78rem;color:#0078d4;font-weight:400">ALZ Reference ↗</a>
-        </div>
-        <div id="alz-score-section">
-          <div class="muted" style="font-size:.82rem">Run a scan to calculate ALZ compliance score.</div>
-        </div>
-      </div>
-
-      <!-- Non-Compliant Assignments table -->
-      <div class="card" style="margin-top:16px">
-        <div class="card-title" style="display:flex;align-items:center;justify-content:space-between">
-          Top Non-Compliant Assignments
-          <a href="https://portal.azure.com/#view/Microsoft_Azure_Policy/PolicyMenuBlade/~/Compliance" target="_blank" style="font-size:.78rem;color:#0078d4;font-weight:400">View all in Portal ↗</a>
-        </div>
-        <div id="dashboard-noncompliant"></div>
-      </div>
-    </div>
-
-
-    <!-- PROJECTS TAB -->
-    <div class="tc" id="tc-projects">
-      <div class="card">
-        <div class="card-title" style="display:flex;align-items:center;justify-content:space-between">
-          📋 Policy Migration Projects
-          <button class="btn btn-primary btn-sm" onclick="showNewProjectForm()">+ New Project</button>
-        </div>
-        <p class="muted" style="font-size:.84rem;margin-bottom:18px">
-          Track your policy migration work - migrating custom policies to built-in, assigning initiatives, fixing compliance issues.
-          Projects are saved locally in your browser.
-        </p>
-
-        <!-- New project form (hidden by default) -->
-        <div class="new-proj-form hidden" id="new-proj-form">
-          <div style="font-weight:700;font-size:.9rem;margin-bottom:14px">New Project</div>
-          <div class="form-inline" style="margin-bottom:12px">
-            <div>
-              <label class="lbl">Project name</label>
-              <input id="new-proj-name" class="inp" type="text" placeholder="e.g. Migrate to MCSB">
-            </div>
-            <div>
-              <label class="lbl">Target date (optional)</label>
-              <input id="new-proj-date" class="inp" type="date">
-            </div>
-            <div>
-              <label class="lbl">Priority</label>
-              <select id="new-proj-priority" class="inp">
-                <option value="high">High</option>
-                <option value="medium" selected>Medium</option>
-                <option value="low">Low</option>
-              </select>
-            </div>
-          </div>
-          <div class="form-group">
-            <label class="lbl">Description (optional)</label>
-            <input id="new-proj-desc" class="inp" type="text" placeholder="What are you trying to achieve?">
-          </div>
-          <div style="display:flex;gap:8px;margin-top:12px">
-            <button class="btn btn-primary" onclick="createProject()">Create Project</button>
-            <button class="btn" style="background:#f3f2f1;border:1px solid #c8c6c4;color:#323130" onclick="hideNewProjectForm()">Cancel</button>
-          </div>
-          <!-- Quick start templates -->
-          <div style="margin-top:16px;padding-top:14px;border-top:1px solid #edebe9">
-            <div class="lbl">Quick start from template:</div>
-            <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:6px">
-              <button class="filter-btn" onclick="useTemplate('mcsb')">📦 Adopt MCSB Initiative</button>
-              <button class="filter-btn" onclick="useTemplate('custom_cleanup')">🧹 Clean up Custom Policies</button>
-              <button class="filter-btn" onclick="useTemplate('audit_to_deny')">🎓 Audit → Deny Migration</button>
-              <button class="filter-btn" onclick="useTemplate('tagging')">🏷️ Tagging Governance</button>
-            </div>
-          </div>
-        </div>
-
-        <!-- Projects list -->
-        <div id="projects-list">
-          <div class="empty"><div class="empty-icon">📋</div><p>No projects yet. Create one to start tracking your policy migration work.</p></div>
-        </div>
-      </div>
-    </div>
-
-    <!-- INSIGHTS TAB -->
-    <div class="tc" id="tc-insights">
-      <div class="card">
-        <div class="card-title">🔎 Policy Insights</div>
-
-        <!-- Deprecated -->
-        <div style="margin-bottom:28px">
-          <div style="font-weight:700;font-size:.95rem;color:#a4262c;margin-bottom:10px;display:flex;align-items:center;gap:8px">
-            🚫 Deprecated &amp; Broken Policy Assignments
-            <span class="badge b-err" id="badge-deprecated">0</span>
-          </div>
-          <div id="insights-deprecated">
-            <div class="empty" style="padding:20px"><p>Run a scan to detect deprecated or broken assignments.</p></div>
-          </div>
-        </div>
-
-        <!-- Audit→Deny Tracker -->
-        <div style="margin-bottom:28px">
-          <div style="font-weight:700;font-size:.95rem;color:#0078d4;margin-bottom:10px;display:flex;align-items:center;gap:8px">
-            🎓 Audit → Deny Graduation Tracker
-            <span class="badge b-info" id="badge-audit-ready">0</span>
-          </div>
-          <p class="muted" style="font-size:.82rem;margin-bottom:12px">
-            ALZ Best Practice: assign policies as <strong>Audit</strong> for 30 days, then upgrade to <strong>Deny</strong> once you understand the impact.
-            Policies in red have been auditing for 30+ days and are ready to enforce.
-          </p>
-          <div id="insights-audit-ready">
-            <div class="empty" style="padding:20px"><p>Run a scan to see Audit assignments ready for enforcement.</p></div>
-          </div>
-        </div>
-
-        <!-- Duplicates -->
-        <div style="margin-bottom:28px">
-          <div style="font-weight:700;font-size:.95rem;color:#7a4100;margin-bottom:10px;display:flex;align-items:center;gap:8px">
-            ♻️ Duplicate Policies (Same Operation, Same Scope)
-            <span class="badge b-warn" id="badge-duplicates">0</span>
-          </div>
-          <div id="insights-duplicates">
-            <div class="empty" style="padding:20px"><p>Run a scan to detect duplicate policies.</p></div>
-          </div>
-        </div>
-
-        <!-- Initiative opportunities -->
-        <div>
-          <div style="font-weight:700;font-size:.95rem;color:#0078d4;margin-bottom:10px;display:flex;align-items:center;gap:8px">
-            📦 Initiative Consolidation Opportunities
-            <span class="badge b-info" id="badge-initiatives">0</span>
-          </div>
-          <p class="muted" style="font-size:.82rem;margin-bottom:14px">Replace groups of individual policies with a single Microsoft-maintained initiative that covers them all.</p>
-          <div id="insights-initiatives">
-            <div class="empty" style="padding:20px"><p>Run a scan to detect initiative opportunities.</p></div>
-          </div>
-        </div>
-
-      </div>
-    </div>
-
-    <!-- AGENT TAB -->
-    <div class="tc" id="tc-agent">
-      <div class="card">
-        <div class="card-title">🤖 Policy Agent <span class="badge b-info" style="font-size:.72rem;margin-left:8px">Powered by OpenAI</span></div>
-        <div class="agent-layout">
-
-          <!-- Sidebar: config + context -->
-          <div class="agent-sidebar">
-            <div class="agent-cfg">
-              <div class="agent-cfg-title">API Configuration</div>
-              <div class="agent-type-row">
-                <button class="type-btn active" id="type-azurecred" onclick="setApiType('azure-credential')">Azure (signed in)</button>
-                <button class="type-btn" id="type-azure" onclick="setApiType('azure')">Azure + Key</button>
-                <button class="type-btn" id="type-openai" onclick="setApiType('openai')">OpenAI</button>
-              </div>
-
-              <!-- Azure signed-in: auto-discover -->
-              <div id="azurecred-fields">
-                <div id="oai-discover-state">
-                  <button class="btn btn-primary" style="width:100%;justify-content:center;font-size:.82rem" id="discover-btn" onclick="discoverOpenAI()">
-                    🔍 Discover my Azure OpenAI models
-                  </button>
-                  <div class="hint" style="margin-top:5px">Scans your subscriptions for GPT deployments you have access to</div>
-                </div>
-                <div id="oai-discover-result" class="hidden">
-                  <div class="form-group">
-                    <label class="lbl">Select model</label>
-                    <select id="oai-model-select" class="inp" style="font-size:.82rem" onchange="onModelSelect(this)">
-                      <option value="">-- select --</option>
-                    </select>
-                  </div>
-                  <div id="oai-selected-detail" class="hint" style="margin-top:4px;line-height:1.6"></div>
-                  <input type="hidden" id="agent-endpoint-cred">
-                  <input type="hidden" id="agent-deployment-cred">
-                </div>
-                <div id="oai-no-models" class="hidden" style="margin-top:8px">
-                  <div class="alert a-warn" style="font-size:.8rem">No Azure OpenAI resources found in your subscriptions.<br>
-                    <a href="https://portal.azure.com/#create/Microsoft.CognitiveServicesOpenAI" target="_blank" style="color:#7a4100;font-weight:700">Create one in Azure Portal ↗</a>
-                  </div>
-                </div>
-                <div class="hint" style="margin-top:6px">Uses your existing Azure sign-in - no key needed</div>
-              </div>
-
-              <!-- Azure + Key -->
-              <div id="azurekey-fields" class="hidden">
-                <div class="form-group">
-                  <label class="lbl">Endpoint</label>
-                  <input id="agent-endpoint" class="inp" type="text" placeholder="https://xxx.openai.azure.com" style="font-size:.82rem">
-                </div>
-                <div class="form-group">
-                  <label class="lbl">Deployment</label>
-                  <input id="agent-deployment" class="inp" type="text" placeholder="gpt-4o" style="font-size:.82rem">
-                </div>
-                <div class="form-group">
-                  <label class="lbl">API Key</label>
-                  <input id="agent-api-key" class="inp" type="password" placeholder="key..." style="font-size:.82rem">
-                </div>
-              </div>
-
-              <!-- OpenAI.com -->
-              <div id="openai-fields" class="hidden">
-                <div class="form-group">
-                  <label class="lbl">API Key</label>
-                  <input id="agent-api-key-oai" class="inp" type="password" placeholder="sk-..." style="font-size:.82rem">
-                </div>
-              </div>
-            </div>
-            <div class="agent-context-box">
-              <div class="agent-context-title">Scan Context</div>
-              <div id="agent-ctx-text" class="muted" style="font-size:.75rem;line-height:1.5">Run a scan first to give the agent context about your policies.</div>
-            </div>
-          </div>
-
-          <!-- Chat area -->
-          <div class="agent-main">
-            <div class="chat-messages" id="chat-messages">
-              <div class="chat-msg system">Hi! I'm your Azure Policy expert. Ask me anything - I can explain policies, write JSON, assign policies, or trigger remediation. I'll always ask for confirmation before making changes.</div>
-            </div>
-            <div id="chat-jsons"></div>
-            <div class="chat-input-row">
-              <textarea id="chat-input" class="chat-input" placeholder="Ask about policies, request JSON, or say 'assign policy X to subscription Y'..." rows="1" onkeydown="chatKeyDown(event)"></textarea>
-              <button class="btn btn-primary" id="chat-send-btn" onclick="sendChat()">Send</button>
-            </div>
-            <div class="hint" style="margin-top:6px">The agent has full context of your scan results. Try: "What's wrong with my custom policies?" or "Write a policy to require tags on all resources"</div>
-          </div>
-        </div>
-      </div>
-    </div>
-  </div>
-
-  <!-- Also show agent tab when no scan yet -->
-  <div id="agent-pre-scan" class="hidden">
-    <div class="card">
-      <div class="card-title">🤖 Policy Agent</div>
-      <p class="muted" style="font-size:.84rem">Run a scan first to use the Policy Agent with your subscription context. Or click the Agent tab after scanning.</p>
-    </div>
-  </div>
-
-</div>
-
-
-<!-- Auto Fix Modal -->
-<div class="modal-backdrop hidden" id="autofix-modal">
-  <div class="modal" style="width:640px">
-    <div class="modal-hdr warning" id="af-modal-hdr">
-      <div class="modal-title">🔧 <span id="af-title">Auto Fix - Replace Custom Policy with Built-in</span> <span class="b-warning-pill">REVIEW REQUIRED</span></div>
-      <div class="muted" style="font-size:.82rem;margin-top:4px" id="af-subtitle"></div>
-    </div>
-    <div class="modal-body">
-      <div class="modal-section">
-        <div class="modal-section-title">Built-in replacement</div>
-        <div class="modal-explanation" id="af-builtin-name" style="font-weight:700"></div>
-        <div style="font-size:.82rem;color:#605e5c;margin-top:4px" id="af-builtin-desc"></div>
-      </div>
-      <div class="modal-section">
-        <div class="modal-section-title">New assignment scope</div>
-        <input id="af-scope" class="inp" type="text" style="font-size:.84rem">
-      </div>
-      <div class="modal-section">
-        <div class="modal-section-title">New assignment display name</div>
-        <input id="af-display-name" class="inp" type="text" style="font-size:.84rem">
-      </div>
-      <div class="modal-section" id="af-params-section">
-        <div class="modal-section-title">Parameters <span class="muted" style="font-size:.72rem;text-transform:none" id="af-params-hint"></span></div>
-        <table class="param-table" id="af-params-table">
-          <thead><tr><th>Parameter</th><th>Value</th><th>Source</th></tr></thead>
-          <tbody id="af-params-body"></tbody>
-        </table>
-      </div>
-      <div class="modal-section" id="af-unmapped-section" style="display:none">
-        <div class="modal-section-title" style="color:#a4262c">Required parameters with no value found</div>
-        <div style="font-size:.82rem;color:#605e5c" id="af-unmapped-list"></div>
-      </div>
-      <div id="af-identity-note" class="hidden" style="background:#dce9f8;border:1px solid #90c3f5;border-radius:6px;padding:9px 12px;margin-bottom:12px;font-size:.82rem">
-        🔐 <strong>Managed Identity required:</strong> This policy uses DeployIfNotExists or Modify effect. A <strong>SystemAssigned managed identity</strong> will be created automatically with the assignment. You may need to grant it the appropriate roles after creation.
-      </div>
-      <div style="margin-top:14px">
-        <label style="display:flex;align-items:center;gap:8px;font-size:.84rem;cursor:pointer">
-          <input type="checkbox" id="af-delete-old">
-          Also delete the existing custom policy assignment after creating the built-in one
-        </label>
-      </div>
-    </div>
-    <div class="modal-actions">
-      <button class="btn" style="background:#f3f2f1;border:1px solid #c8c6c4;color:#323130" onclick="closeAutofixModal()">Cancel</button>
-      <button class="btn btn-primary" id="af-confirm-btn" onclick="executeAutofix()">Create Assignment</button>
-    </div>
-  </div>
-</div>
-<!-- Drill-down Modal -->
-<div class="modal-backdrop hidden" id="drilldown-modal">
-  <div class="modal" style="width:720px;max-height:85vh">
-    <div class="modal-hdr danger">
-      <div class="modal-title">🔍 <span id="dd-title">Non-Compliant Resources</span></div>
-      <div class="muted" style="font-size:.82rem;margin-top:4px" id="dd-subtitle"></div>
-    </div>
-    <div class="modal-body" style="max-height:55vh;overflow-y:auto">
-      <div id="dd-body"><div class="tree-loading">Loading...</div></div>
-    </div>
-    <div class="modal-actions">
-      <button class="btn" style="background:#f3f2f1;border:1px solid #c8c6c4;color:#323130" onclick="document.getElementById('drilldown-modal').classList.add('hidden')">Close</button>
-      <button class="btn btn-primary" id="dd-remediate-btn" onclick="triggerRemediation()" style="display:none">🔧 Trigger Remediation</button>
-    </div>
-  </div>
-</div>
-
-<!-- Confirmation Modal -->
-<div class="modal-backdrop hidden" id="confirm-modal">
-  <div class="modal">
-    <div class="modal-hdr" id="modal-hdr">
-      <div class="modal-title">
-        <span id="modal-icon">⚠️</span>
-        <span id="modal-title-text">Confirm Action</span>
-        <span id="modal-danger-pill" class="b-warning-pill">WARNING</span>
-      </div>
-      <div id="modal-subtitle" class="muted" style="font-size:.82rem;margin-top:4px"></div>
-    </div>
-    <div class="modal-body">
-      <div class="modal-section">
-        <div class="modal-section-title">Why this action</div>
-        <div class="modal-explanation" id="modal-explanation"></div>
-      </div>
-      <div class="modal-section">
-        <div class="modal-section-title">What will happen</div>
-        <div class="modal-what" id="modal-what"></div>
-      </div>
-      <div class="modal-section">
-        <div class="modal-section-title">Risk factors</div>
-        <ul class="modal-reasons" id="modal-reasons"></ul>
-      </div>
-      <div id="modal-danger-confirm" class="modal-confirm-check hidden">
-        <input type="checkbox" id="danger-ack" onchange="updateConfirmBtn()">
-        <label for="danger-ack">I understand the risks and want to proceed with this action</label>
-      </div>
-    </div>
-    <div class="modal-actions">
-      <button class="btn" style="background:#f3f2f1;border:1px solid #c8c6c4;color:#323130" onclick="closeModal()">Cancel</button>
-      <button class="btn btn-danger" id="modal-confirm-btn" onclick="executeAction()">Confirm Action</button>
-    </div>
-  </div>
-</div>
-
-<script>
 // =====================================================================
 // State
 // =====================================================================
@@ -4065,24 +4063,6 @@ function showTab(name) {
 }
 
 </script>
+</script>
 </body>
 </html>
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
