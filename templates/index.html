@@ -1271,6 +1271,7 @@ function renderIssues(issues) {
 }
 function renderRecs(results) {
   const el = document.getElementById('recs-body');
+  const dismissed = getDismissed();
 
   // Build assignment lookup: custom policy id -> existing assignments
   const assignMap = {};
