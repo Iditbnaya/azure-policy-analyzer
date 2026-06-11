@@ -1875,7 +1875,6 @@ function renderIssues(issues) {
   return'<div>'+issues.map(i=>{const icon=i.severity==='error'?'🔴':i.severity==='warning'?'🟡':'ℹ️';return`<div class="issue-item"><span class="issue-icon">${icon}</span><div><div class="issue-msg">${esc(i.message||'')}</div>${i.fix?`<div class="issue-fix"><span class="fix-kw">Fix: </span>${esc(i.fix)}</div>`:''}</div></div>`;}).join('')+'</div>';
 }
 function renderRecs(results) {
-  const dismissed = getDismissed();
   const el = document.getElementById('recs-body');
 
   // Build assignment lookup: custom policy id -> existing assignments
