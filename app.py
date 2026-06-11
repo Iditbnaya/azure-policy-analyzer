@@ -574,6 +574,11 @@ def upgrade_assignment_effect():
     old_assignment = data.get("assignment", {})
     new_effect = data.get("new_effect", "Deny")
 
+    # Allowlist: only accept safe upgrade effects
+    ALLOWED_EFFECTS = {"Audit", "AuditIfNotExists", "Deny", "Disabled"}
+    if new_effect not in ALLOWED_EFFECTS:
+        return jsonify({"status": "error", "message": f"Invalid effect value: {new_effect}"}), 400
+
     if not subscription_id:
         sub_ids = _LAST_SCAN_CONTEXT.get("sub_ids", [])
         subscription_id = sub_ids[0] if sub_ids else ""
@@ -885,6 +890,28 @@ def agent_execute():
 
     if not subscription_id:
         return jsonify({"status": "error", "message": "No subscription available. Please run a scan first."}), 400
+
+    # Security: validate scope is within scanned subscriptions (prevent prompt-injection scope escalation)
+    if action_type == "assign_policy":
+        requested_scope = action_params.get("scope", "")
+        scanned_subs = _LAST_SCAN_CONTEXT.get("sub_ids", [])
+        scope_ok = any(
+            requested_scope.lower().startswith(f"/subscriptions/{sid.lower()}")
+            for sid in scanned_subs
+        ) or requested_scope.lower() == f"/subscriptions/{subscription_id.lower()}"
+        if not scope_ok:
+            return jsonify({"status": "error", "message": "Scope is outside the scanned subscriptions. For safety, only subscription-level scopes are permitted."}), 400
+
+        # Validate policy_definition_id format (GUID-based or subscription-based)
+        import re as _re
+        def_id = action_params.get("policy_definition_id", "")
+        valid_def = bool(_re.match(
+            r'^(/providers/Microsoft\.Authorization/policyDefinitions/[0-9a-f\-]{36}|'
+            r'/subscriptions/[0-9a-f\-]{36}/providers/Microsoft\.Authorization/policyDefinitions/[\w\-]+)$',
+            def_id, _re.IGNORECASE
+        ))
+        if not valid_def:
+            return jsonify({"status": "error", "message": "Invalid policy_definition_id format."}), 400
 
     try:
         credential = auth_manager.get_credential(tenant_id)

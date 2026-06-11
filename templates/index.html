@@ -508,7 +508,7 @@ function renderDashboard(results) {
     ncEl.innerHTML = `<div class="tbl-wrap"><table>
       <thead><tr><th>Assignment</th><th>Non-Compliant Resources</th><th>Policies Affected</th><th></th></tr></thead>
       <tbody>${allCompliance.slice(0,10).map(c => `
-        <tr style="cursor:pointer" onclick="showDrilldown('${c.policy_assignment_id||''}','${c.policy_assignment_name||''}','${results[0]?.subscription_id||''}')">
+        <tr style="cursor:pointer" onclick="showDrilldown('${esc(c.policy_assignment_id||'')}','${esc(c.policy_assignment_name||'')}','${esc(results[0]?.subscription_id||'')}')">
           <td><strong>${esc(c.policy_assignment_name||'')}</strong><br>
             <span class="muted" style="font-size:.72rem">${esc(c.policy_assignment_id||'')}</span>
           </td>
@@ -2828,7 +2828,7 @@ function renderDashboard(results) {
     ncEl.innerHTML = `<div class="tbl-wrap"><table>
       <thead><tr><th>Assignment</th><th>Non-Compliant Resources</th><th>Policies Affected</th><th></th></tr></thead>
       <tbody>${allCompliance.slice(0,10).map(c => `
-        <tr style="cursor:pointer" onclick="showDrilldown('${c.policy_assignment_id||''}','${c.policy_assignment_name||''}','${results[0]?.subscription_id||''}')">
+        <tr style="cursor:pointer" onclick="showDrilldown('${esc(c.policy_assignment_id||'')}','${esc(c.policy_assignment_name||'')}','${esc(results[0]?.subscription_id||'')}')">
           <td><strong>${esc(c.policy_assignment_name||'')}</strong><br>
             <span class="muted" style="font-size:.72rem">${esc(c.policy_assignment_id||'')}</span>
           </td>
